@@ -227,7 +227,7 @@ class Controller(object):
 
     def __get_fig(self):
         if self.current_stage == "imported":
-            return self.data.plot(self.current_number)
+            return self.data.plot_raw(self.current_number)
         elif self.current_stage == "filtered":
             return self.data.plot_filtered(self.current_number)
         elif self.current_stage == "distributions":
