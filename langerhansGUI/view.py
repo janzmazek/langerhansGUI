@@ -3,7 +3,6 @@ from tkinter import messagebox
 from tkinter import filedialog
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import copy
-import webbrowser
 
 
 # Window parameters
