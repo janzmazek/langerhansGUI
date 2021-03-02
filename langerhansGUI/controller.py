@@ -110,8 +110,15 @@ class Controller(object):
         file = self.view.save_as("pdf")
         if file is None:
             return
-        self.data.plot_events()
-        plt.savefig(file)
+        fig, ax = plt.subplots()
+        checkpoint = 0.05
+        for i in self.data.plot_events(ax):
+            print(i)
+            self.view.update_progressbar(i*100)
+            if i > checkpoint:
+                checkpoint += 0.05
+                self.view.update()
+        fig.savefig(file)
 
     def save_excluded(self):
         if self.current_stage == 0:
@@ -307,10 +314,10 @@ class Controller(object):
         self.view.draw_fig(self.__get_fig())
 
     def apply_parameters_click(self):
-        new_settings = self.__get_values(self.view.entries)
-        self.data.import_settings(new_settings)
         self.data.reset_computations()
         self.current_stage = "imported"
+        new_settings = self.__get_values(self.view.entries)
+        self.data.import_settings(new_settings)
         self.draw_fig()
         self.view.settings_window.destroy()
 
