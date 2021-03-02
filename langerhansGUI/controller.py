@@ -3,6 +3,9 @@ import numpy as np
 import yaml
 import pickle
 import matplotlib.pyplot as plt
+from matplotlib.gridspec import GridSpec
+import time
+
 
 class Controller(object):
     """docstring for Controller."""
@@ -136,7 +139,13 @@ class Controller(object):
             self.draw_fig()
         else:
             try:
-                self.data.filter()
+                checkpoint = 0.1
+                for i in self.data.filter():
+                    print(i)
+                    self.view.update_progressbar(i*100)
+                    if i > checkpoint:
+                        checkpoint += 0.1
+                        self.view.update()
                 self.current_stage = "filtered"
                 self.draw_fig()
             except ValueError as e:
@@ -150,7 +159,13 @@ class Controller(object):
             self.draw_fig()
         else:
             try:
-                self.data.compute_distributions()
+                checkpoint = 0.1
+                for i in self.data.compute_distributions():
+                    print(i)
+                    self.view.update_progressbar(i*100)
+                    if i > checkpoint:
+                        checkpoint += 0.1
+                        self.view.update()
                 self.current_stage = "distributions"
                 self.draw_fig()
             except ValueError as e:
@@ -164,8 +179,13 @@ class Controller(object):
             self.draw_fig()
         else:
             try:
-                self.data.binarize_fast()
-                self.data.binarize_slow()
+                checkpoint = 0.1
+                for (i, j) in zip(self.data.binarize_fast(), self.data.binarize_slow()):
+                    print(i)
+                    self.view.update_progressbar(i*100)
+                    if i > checkpoint:
+                        checkpoint += 0.1
+                        self.view.update()
                 self.current_stage = "binarized"
                 self.draw_fig()
             except ValueError as e:
@@ -209,7 +229,8 @@ class Controller(object):
         if self.current_stage == 0:
             return
         try:
-            self.data.autoexclude()
+            for i in self.data.autoexclude():
+                print(i)
         except ValueError as e:
             print(e)
         self.draw_fig()
@@ -220,20 +241,48 @@ class Controller(object):
         if self.data.get_activity() is not False:
             return
         try:
-            self.data.autolimit()
+            checkpoint = 0.02
+            for i in self.data.autolimit():
+                print(i)
+                self.view.update_progressbar(i*100)
+                if i > checkpoint:
+                    checkpoint += 0.02
+                    self.view.update()
         except ValueError as e:
             print(e)
         self.draw_fig()
 
     def __get_fig(self):
         if self.current_stage == "imported":
-            return self.data.plot_raw(self.current_number)
+            fig, (ax1, ax2) = plt.subplots(nrows=2)
+            self.data.plot(ax1, self.current_number, plots=("mean"))
+            self.data.plot(ax2, self.current_number, plots=("raw"), protocol=False)
+            return fig
         elif self.current_stage == "filtered":
-            return self.data.plot_filtered(self.current_number)
+            fig, (ax1, ax2) = plt.subplots(2)
+            fig.suptitle("Filtered data")
+            self.data.plot(ax1, self.current_number, plots=("raw"))
+            ax1.set_xlabel(None)
+            self.data.plot(ax2, self.current_number, plots=("fast"), protocol=False)
+            return fig
         elif self.current_stage == "distributions":
-            return self.data.plot_distributions(self.current_number)
+            fig = plt.figure(constrained_layout=True)
+            gs = GridSpec(2, 2, figure=fig)
+            ax11 = fig.add_subplot(gs[0, 0])
+            ax11.set_title("Distribution of pre-stimulatory signal")
+            ax12 = fig.add_subplot(gs[0, 1])
+            ax12.set_title("Distribution of post-stimulatory signal")
+            ax2 = fig.add_subplot(gs[1, :])
+            self.data.plot_distributions(ax11, ax12, self.current_number)
+            self.data.plot(ax2, self.current_number, plots=("raw, fast"), noise=True)
+            ax2.legend()
+            return fig
         elif self.current_stage == "binarized":
-            return self.data.plot_binarized(self.current_number)
+            fig, (ax1, ax2) = plt.subplots(2, 1, sharex=True)
+            fig.suptitle("Binarized data")
+            self.data.plot(ax1, self.current_number, plots=("raw"))
+            self.data.plot(ax2, self.current_number, plots=("fast", "bin_fast"), protocol=False)
+            return fig
 
     def draw_fig(self):
         if self.current_stage == 0:
@@ -247,6 +296,7 @@ class Controller(object):
         self.data.reset_computations()
         self.current_stage = "imported"
         self.draw_fig()
+        self.view.settings_window.destroy()
 
     def __get_values(self, parameter):
         if type(parameter) not in (dict, list):
