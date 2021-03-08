@@ -19,13 +19,18 @@ class Controller(object):
 
         self.current_number = 0
         self.current_stage = 0
+        self.busy = False
 
 # ---------------------------- Menu click methods --------------------------- #
     def import_data(self):
+        if self.busy:
+            return
         filename = self.view.open_file()
         if filename is None:
             return
         try:
+            if self.current_stage != 0:
+                self.data.reset_computations()
             series = np.loadtxt(filename)[:-1, :]
             self.data.import_data(series)
             self.current_stage = "imported"
@@ -34,7 +39,7 @@ class Controller(object):
             print(e)
 
     def import_settings(self):
-        if self.current_stage == 0:
+        if self.current_stage == 0 or self.busy:
             return
         filename = self.view.open_file()
         if filename is None:
@@ -54,7 +59,7 @@ class Controller(object):
             print(e)
 
     def import_excluded(self):
-        if self.current_stage == 0:
+        if self.current_stage == 0 or self.busy:
             return
         filename = self.view.open_file()
         if filename is None:
@@ -67,6 +72,8 @@ class Controller(object):
             print(e)
 
     def import_object(self):
+        if self.busy:
+            return
         filename = self.view.open_file()
         if filename is None:
             return
@@ -79,7 +86,7 @@ class Controller(object):
         self.draw_fig()
 
     def edit_settings(self):
-        if self.current_stage == 0:
+        if self.current_stage == 0 or self.busy:
             return
         settings = self.data.get_settings()
         self.view.open_settings_window(settings)
@@ -105,7 +112,7 @@ class Controller(object):
         plt.savefig(file)
 
     def save_eventplot(self):
-        if self.current_stage is not "binarized":
+        if not self.data.is_analyzed():
             return
         file = self.view.save_as("pdf")
         if file is None:
@@ -131,7 +138,7 @@ class Controller(object):
         np.savetxt(filename, self.data.get_good_cells(), fmt="%i")
 
     def save_object(self):
-        if not self.data.is_analyzed():
+        if not self.data.is_analyzed() or self.busy:
             return
         filename = self.view.save_as("pkl")
         if filename is None:
@@ -142,7 +149,7 @@ class Controller(object):
 # --------------------------- Button click methods -------------------------- #
 
     def filter_click(self):
-        if self.current_stage == 0:
+        if self.current_stage == 0 or self.busy:
             return
         if self.data.get_filtered_slow() is not False or \
                 self.data.get_filtered_fast() is not False:
@@ -150,40 +157,42 @@ class Controller(object):
             self.draw_fig()
         else:
             try:
+                self.busy = True
                 checkpoint = 0.1
                 for i in self.data.filter():
-                    print(i)
                     self.view.update_progressbar(i*100)
                     if i > checkpoint:
                         checkpoint += 0.1
                         self.view.update()
+                self.busy = False
                 self.current_stage = "filtered"
                 self.draw_fig()
             except ValueError as e:
                 print(e)
 
     def distributions_click(self):
-        if self.current_stage == 0:
+        if self.current_stage == 0 or self.busy:
             return
         elif self.data.get_distributions() is not False:
             self.current_stage = "distributions"
             self.draw_fig()
         else:
             try:
+                self.busy = True
                 checkpoint = 0.1
                 for i in self.data.compute_distributions():
-                    print(i)
                     self.view.update_progressbar(i*100)
                     if i > checkpoint:
                         checkpoint += 0.1
                         self.view.update()
+                self.busy = False
                 self.current_stage = "distributions"
                 self.draw_fig()
             except ValueError as e:
                 print(e)
 
     def binarize_click(self):
-        if self.current_stage == 0:
+        if self.current_stage == 0 or self.busy:
             return
         if self.data.get_binarized_slow() is not False or \
                 self.data.get_binarized_fast() is not False:
@@ -191,15 +200,16 @@ class Controller(object):
             self.draw_fig()
         else:
             try:
+                self.busy = True
                 checkpoint = 0.1
-                for (i, j) in zip(self.data.binarize_fast(),
+                for (i, _) in zip(self.data.binarize_fast(),
                                   self.data.binarize_slow()
                                   ):
-                    print(i, j)
                     self.view.update_progressbar(i*100)
                     if i > checkpoint:
                         checkpoint += 0.1
                         self.view.update()
+                self.busy = False
                 self.current_stage = "binarized"
                 self.draw_fig()
             except ValueError as e:
@@ -240,47 +250,51 @@ class Controller(object):
         self.draw_fig()
 
     def autoexclude_click(self):
-        if self.current_stage == 0:
+        if self.current_stage == 0 or self.busy:
             return
         try:
-            for i in self.data.autoexclude():
-                print(i)
+            self.busy = True
+            for _ in self.data.autoexclude():
+                pass
+            self.busy = False
         except ValueError as e:
             print(e)
         self.draw_fig()
 
     def autolimit_click(self):
-        if self.current_stage == 0:
+        if self.current_stage == 0 or self.busy:
             return
         if self.data.get_activity() is not False:
             return
         try:
+            self.busy = True
             checkpoint = 0.02
             for i in self.data.autolimit():
-                print(i)
                 self.view.update_progressbar(i*100)
                 if i > checkpoint:
                     checkpoint += 0.02
                     self.view.update()
+            self.busy = False
         except ValueError as e:
             print(e)
         self.draw_fig()
 
     def __get_fig(self):
         if self.current_stage == "imported":
-            fig, (ax1, ax2) = plt.subplots(nrows=2)
+            fig, (ax1, ax2) = plt.subplots(2, sharex=True)
             self.data.plot(ax1, self.current_number, plots=("mean"))
+            ax1.set_xlabel(None)
             self.data.plot(
                 ax2, self.current_number, plots=("raw"), protocol=False
                 )
             return fig
         elif self.current_stage == "filtered":
-            fig, (ax1, ax2) = plt.subplots(2)
+            fig, (ax1, ax2) = plt.subplots(2, sharex=True)
             fig.suptitle("Filtered data")
-            self.data.plot(ax1, self.current_number, plots=("raw"))
+            self.data.plot(ax1, self.current_number, plots=("raw",))
             ax1.set_xlabel(None)
             self.data.plot(
-                ax2, self.current_number, plots=("fast"), protocol=False
+                ax2, self.current_number, plots=("fast",), protocol=False
                 )
             return fig
         elif self.current_stage == "distributions":
@@ -293,14 +307,17 @@ class Controller(object):
             ax2 = fig.add_subplot(gs[1, :])
             self.data.plot_distributions(ax11, ax12, self.current_number)
             self.data.plot(
-                ax2, self.current_number, plots=("raw, fast"), noise=True
+                ax2, self.current_number, plots=("raw", "fast"), noise=True
                 )
             ax2.legend()
             return fig
         elif self.current_stage == "binarized":
-            fig, (ax1, ax2) = plt.subplots(2, 1, sharex=True)
+            fig, (ax1, ax2) = plt.subplots(2, sharex=True)
             fig.suptitle("Binarized data")
-            self.data.plot(ax1, self.current_number, plots=("raw"))
+            self.data.plot(
+                ax1, self.current_number, plots=("raw")
+                )
+            ax1.set_xlabel(None)
             self.data.plot(
                 ax2, self.current_number, plots=("fast", "bin_fast"),
                 protocol=False
