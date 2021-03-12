@@ -201,7 +201,7 @@ class View(tk.Tk):
         filename = filedialog.askopenfilename(
             title="Select file",
             filetypes=(
-                ("dat files", "*.dat"),
+                ("txt files", "*.txt"),
                 ("YAML files", "*.yaml"),
                 ("pickle files", "*.pkl")
                 )

@@ -31,7 +31,7 @@ class Controller(object):
         try:
             if self.current_stage != 0:
                 self.data.reset_computations()
-            series = np.loadtxt(filename)[:-1, :]
+            series = np.loadtxt(filename)
             self.data.import_data(series)
             self.current_stage = "imported"
             self.draw_fig()
