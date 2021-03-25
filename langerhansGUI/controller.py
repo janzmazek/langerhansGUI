@@ -281,7 +281,7 @@ class Controller(object):
 
     def __get_fig(self):
         if self.current_stage == "imported":
-            fig, (ax1, ax2) = plt.subplots(2, sharex=True)
+            fig, (ax1, ax2) = plt.subplots(2, sharex=True, tight_layout=True)
             self.data.plot(ax1, self.current_number, plots=("mean"))
             ax1.set_xlabel(None)
             self.data.plot(
@@ -289,7 +289,7 @@ class Controller(object):
                 )
             return fig
         elif self.current_stage == "filtered":
-            fig, (ax1, ax2) = plt.subplots(2, sharex=True)
+            fig, (ax1, ax2) = plt.subplots(2, sharex=True, tight_layout=True)
             fig.suptitle("Filtered data")
             self.data.plot(ax1, self.current_number, plots=("raw",))
             ax1.set_xlabel(None)
@@ -298,18 +298,36 @@ class Controller(object):
                 )
             return fig
         elif self.current_stage == "distributions":
-            fig = plt.figure(constrained_layout=True)
-            gs = GridSpec(2, 2, figure=fig)
-            ax11 = fig.add_subplot(gs[0, 0])
-            ax11.set_title("Distribution of pre-stimulatory signal")
-            ax12 = fig.add_subplot(gs[0, 1])
-            ax12.set_title("Distribution of post-stimulatory signal")
-            ax2 = fig.add_subplot(gs[1, :])
-            self.data.plot_distributions(ax11, ax12, self.current_number)
-            self.data.plot(
-                ax2, self.current_number, plots=("raw", "fast"), noise=True
-                )
-            ax2.legend()
+            fig = plt.figure(tight_layout=True)
+
+            gs = fig.add_gridspec(2, 3,  width_ratios=(1, 8, 1),
+                                  wspace=0, hspace=0
+                                  )
+
+            ax = fig.add_subplot(gs[0, 1])
+            ax_middle = fig.add_subplot(gs[1, 1], sharex=ax)
+            ax_left = fig.add_subplot(gs[1, 0], sharey=ax_middle)
+            ax_right = fig.add_subplot(gs[1, 2], sharey=ax_middle)
+
+            # plots
+            self.data.plot(ax, self.current_number, "raw")
+            self.data.plot(ax_middle, self.current_number, ["fast"],
+                           protocol=False, noise=True
+                           )
+            self.data.plot_distributions(ax_left, self.current_number)
+            self.data.plot_distributions(ax_right, self.current_number,
+                                         "signal"
+                                         )
+
+            # no labels
+            ax.tick_params(axis="x", labelbottom=False)
+            ax_middle.tick_params(axis="y", labelleft=False)
+            ax_left.tick_params(axis="x", labelbottom=False)
+            ax_right.yaxis.tick_right()
+            ax_right.tick_params(axis="y", labelleft=False, labelright=False)
+            ax.set_xlabel(None)
+            ax_middle.set_ylabel(None)
+            ax_left.set_ylabel("Amplitude")
             return fig
         elif self.current_stage == "binarized":
             fig, (ax1, ax2) = plt.subplots(2, sharex=True)
