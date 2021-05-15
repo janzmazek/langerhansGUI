@@ -34,7 +34,7 @@ class Controller(object):
             self.current_stage = "imported"
             self.draw_fig()
         except ValueError as e:
-            print(e)
+            self.view.error(e)
 
     def import_positions(self):
         if self.busy or self.current_stage == 0:
@@ -49,7 +49,7 @@ class Controller(object):
             self.current_stage = "binarized"
             self.draw_fig()
         except ValueError as e:
-            print(e)
+            self.view.error(e)
 
     def import_settings(self):
         if self.current_stage == 0 or self.busy:
@@ -69,7 +69,7 @@ class Controller(object):
             self.current_stage = "imported"
             self.draw_fig()
         except ValueError as e:
-            print(e)
+            self.view.error(e)
 
     def import_excluded(self):
         if self.current_stage == 0 or self.busy:
@@ -82,7 +82,7 @@ class Controller(object):
             self.data.import_good_cells(good_cells)
             self.draw_fig()
         except ValueError as e:
-            print(e)
+            self.view.error(e)
 
     def import_object(self):
         if self.busy:
@@ -171,19 +171,19 @@ class Controller(object):
             self.current_stage = "filtered"
             self.draw_fig()
         else:
+            self.busy = True
             try:
-                self.busy = True
                 checkpoint = 0.1
                 for i in self.data.filter_fast():
                     self.view.update_progressbar(i*100)
                     if i > checkpoint:
                         checkpoint += 0.1
                         self.view.update()
-                self.busy = False
                 self.current_stage = "filtered"
                 self.draw_fig()
             except ValueError as e:
-                print(e)
+                self.view.error(e)
+            self.busy = False
 
     def distributions_click(self):
         if self.current_stage == 0 or self.busy:
@@ -192,19 +192,19 @@ class Controller(object):
             self.current_stage = "distributions"
             self.draw_fig()
         else:
+            self.busy = True
             try:
-                self.busy = True
                 checkpoint = 0.1
                 for i in self.data.compute_distributions():
                     self.view.update_progressbar(i*100)
                     if i > checkpoint:
                         checkpoint += 0.1
                         self.view.update()
-                self.busy = False
                 self.current_stage = "distributions"
                 self.draw_fig()
             except ValueError as e:
-                print(e)
+                self.view.error(e)
+            self.busy = False
 
     def binarize_click(self):
         if self.current_stage == 0 or self.busy:
@@ -213,19 +213,19 @@ class Controller(object):
             self.current_stage = "binarized"
             self.draw_fig()
         else:
+            self.busy = True
             try:
-                self.busy = True
                 checkpoint = 0.1
                 for i in self.data.binarize_fast():
                     self.view.update_progressbar(i*100)
                     if i > checkpoint:
                         checkpoint += 0.1
                         self.view.update()
-                self.busy = False
                 self.current_stage = "binarized"
                 self.draw_fig()
             except ValueError as e:
-                print(e)
+                self.view.error(e)
+            self.busy = False
 
     def previous_click(self):
         if self.current_stage == 0:
@@ -248,30 +248,30 @@ class Controller(object):
             return
         try:
             self.data.exclude(self.current_number)
+            self.draw_fig()
         except ValueError as e:
-            print(e)
-        self.draw_fig()
+            self.view.error(e)
 
     def unexclude_click(self):
         if self.current_stage == 0:
             return
         try:
             self.data.unexclude(self.current_number)
+            self.draw_fig()
         except ValueError as e:
-            print(e)
-        self.draw_fig()
+            self.view.error(e)
 
     def autoexclude_click(self):
         if self.current_stage == 0 or self.busy:
             return
+        self.busy = True
         try:
-            self.busy = True
             for _ in self.data.autoexclude():
                 pass
-            self.busy = False
+            self.draw_fig()
         except ValueError as e:
-            print(e)
-        self.draw_fig()
+            self.view.error(e)
+        self.busy = False
 
     def crop_click(self):
         if self.current_stage == 0 or self.busy:
@@ -280,11 +280,17 @@ class Controller(object):
         self.current_stage = "binarized"
 
     def analysis_click(self):
-        if not self.data.is_analyzed():
-            return
         if self.data.get_positions() is False:
-            self.view.positions_warning()
-        self.analysis.to_pandas()
+            proceed = self.view.warning(
+                "Positions not set. Do you want to proceed?"
+                )
+            if not proceed:
+                return
+        try:
+            self.analysis.to_pandas()
+        except ValueError as e:
+            self.view.error(e)
+            return
         self.view.open_analysis_window()
 
     def __get_fig(self):
@@ -423,18 +429,19 @@ class Controller(object):
 
         self.view.crop_window.destroy()
         if choice == 0:
+            self.busy = True
             try:
-                self.busy = True
                 checkpoint = 0.02
                 for i in self.data.autolimit():
                     self.view.update_progressbar(i*100)
                     if i > checkpoint:
                         checkpoint += 0.02
                         self.view.update()
-                self.busy = False
+                self.draw_fig()
             except ValueError as e:
-                print(e)
-            self.draw_fig()
+                self.view.error(e)
+            self.busy = False
+            return
 
         elif choice == 1:
             self.data.crop(fixed_boundaries=(start, end))

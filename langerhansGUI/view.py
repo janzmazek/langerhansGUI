@@ -364,10 +364,11 @@ class View(tk.Tk):
         canvas.draw()
         canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
 
-    def positions_warning(self):
-        messagebox.showwarning("Warning",
-                               "Positions not set. Do you want to continue?",
-                               )
+    def warning(self, message):
+        return messagebox.askyesno("Do you want to proceed?", message)
+
+    def error(self, e):
+        messagebox.showerror("Error", e)
 
     def update_progressbar(self, i):
         self.progressbar["value"] = i
