@@ -1,19 +1,17 @@
-import os
 import numpy as np
 import yaml
 import pickle
 import matplotlib.pyplot as plt
-from matplotlib.gridspec import GridSpec
-import time
+import seaborn as sns
 
 
 class Controller(object):
     """docstring for Controller."""
 
-    def __init__(self, data, view):
+    def __init__(self, data, analysis, view):
         self.data = data
+        self.analysis = analysis
         self.view = view
-        self.analysis = False
 
         self.view.register(self)
 
@@ -34,6 +32,21 @@ class Controller(object):
             series = np.loadtxt(filename)
             self.data.import_data(series)
             self.current_stage = "imported"
+            self.draw_fig()
+        except ValueError as e:
+            print(e)
+
+    def import_positions(self):
+        if self.busy or self.current_stage == 0:
+            return
+        filename = self.view.open_file()
+        if filename is None:
+            return
+        try:
+            positions = np.loadtxt(filename)
+            self.data.import_positions(positions)
+            self.analysis.import_data(self.data)
+            self.current_stage = "binarized"
             self.draw_fig()
         except ValueError as e:
             print(e)
@@ -83,6 +96,8 @@ class Controller(object):
         except Exception as exc:
             print("Unsuccessful: {}.".format(exc))
         self.current_stage = "imported"
+        threshold = self.data.get_settings()["Network threshold"]
+        self.analysis.import_data(self.data, threshold)
         self.draw_fig()
 
     def edit_settings(self):
@@ -138,7 +153,8 @@ class Controller(object):
         np.savetxt(filename, self.data.get_good_cells(), fmt="%i")
 
     def save_object(self):
-        if not self.data.is_analyzed() or self.busy:
+        # if not self.data.is_analyzed() or self.busy:
+        if self.busy:
             return
         filename = self.view.save_as("pkl")
         if filename is None:
@@ -151,15 +167,14 @@ class Controller(object):
     def filter_click(self):
         if self.current_stage == 0 or self.busy:
             return
-        if self.data.get_filtered_slow() is not False or \
-                self.data.get_filtered_fast() is not False:
+        if self.data.get_filtered_fast() is not False:
             self.current_stage = "filtered"
             self.draw_fig()
         else:
             try:
                 self.busy = True
                 checkpoint = 0.1
-                for i in self.data.filter():
+                for i in self.data.filter_fast():
                     self.view.update_progressbar(i*100)
                     if i > checkpoint:
                         checkpoint += 0.1
@@ -194,17 +209,14 @@ class Controller(object):
     def binarize_click(self):
         if self.current_stage == 0 or self.busy:
             return
-        if self.data.get_binarized_slow() is not False or \
-                self.data.get_binarized_fast() is not False:
+        if self.data.get_binarized_fast() is not False:
             self.current_stage = "binarized"
             self.draw_fig()
         else:
             try:
                 self.busy = True
                 checkpoint = 0.1
-                for (i, _) in zip(self.data.binarize_fast(),
-                                  self.data.binarize_slow()
-                                  ):
+                for i in self.data.binarize_fast():
                     self.view.update_progressbar(i*100)
                     if i > checkpoint:
                         checkpoint += 0.1
@@ -261,23 +273,19 @@ class Controller(object):
             print(e)
         self.draw_fig()
 
-    def autolimit_click(self):
+    def crop_click(self):
         if self.current_stage == 0 or self.busy:
             return
-        if self.data.get_activity() is not False:
+        self.view.open_crop_window()
+        self.current_stage = "binarized"
+
+    def analysis_click(self):
+        if not self.data.is_analyzed():
             return
-        try:
-            self.busy = True
-            checkpoint = 0.02
-            for i in self.data.autolimit():
-                self.view.update_progressbar(i*100)
-                if i > checkpoint:
-                    checkpoint += 0.02
-                    self.view.update()
-            self.busy = False
-        except ValueError as e:
-            print(e)
-        self.draw_fig()
+        if self.data.get_positions() is False:
+            self.view.positions_warning()
+        self.analysis.to_pandas()
+        self.view.open_analysis_window()
 
     def __get_fig(self):
         if self.current_stage == "imported":
@@ -342,11 +350,46 @@ class Controller(object):
                 )
             return fig
 
+    def dynamic_parameters_fig(self):
+        dyn_par = ["AD", "AT", "OD", "Ff", "ISI", "ISIV", "TP", "TS"]
+        fig, ax = plt.subplots(ncols=4, nrows=2, figsize=(16, 9))
+        df = self.analysis.get_dataframe()
+        for i in range(2):
+            for j in range(4):
+                p = dyn_par[i*4+j]
+                data = df.loc[df["Par ID"] == p]
+                sns.boxplot(ax=ax[i, j], x="Parameter", y="Value", data=data)
+                ax[i, j].set_ylabel('')
+        return fig
+
+    def network_fig(self):
+        fig, ax = plt.subplots()
+        self.analysis.draw_network(ax)
+        return fig
+
+    def glob_network_parameters_fig(self):
+        fig, ax = plt.subplots()
+        return fig
+
+    def network_parameters_fig(self):
+        ind_net_par = ["NDf", "NNDf"]
+        fig, ax = plt.subplots(figsize=(16, 9))
+        df = self.analysis.get_dataframe()
+        data = df.loc[df["Par ID"].isin(ind_net_par)]
+        sns.boxplot(ax=ax, x="Parameter", y="Value", data=data)
+        ax.set_ylabel('')
+        return fig
+
+    def waves_fig(self):
+        fig, ax = plt.subplots()
+        self.analysis.plot_events(ax, *self.analysis.characterize_waves())
+        return fig
+
     def draw_fig(self):
         if self.current_stage == 0:
             return
         plt.close()
-        self.view.draw_fig(self.__get_fig())
+        self.view.refresh_canvas(self.__get_fig())
 
     def apply_parameters_click(self):
         self.data.reset_computations()
@@ -358,7 +401,10 @@ class Controller(object):
 
     def __get_values(self, parameter):
         if type(parameter) not in (dict, list):
-            return float(parameter.get())
+            try:
+                return float(parameter.get())
+            except ValueError:
+                return parameter.get()
         elif type(parameter) is dict:
             dictionary = {}
             for key in parameter:
@@ -369,3 +415,32 @@ class Controller(object):
             for key in parameter:
                 array.append(self.__get_values(key))
             return array
+
+    def apply_options_click(self):
+        choice_var, start_entry, end_entry = self.view.options
+        choice = choice_var.get()
+        start, end = float(start_entry.get()), float(end_entry.get())
+
+        self.view.crop_window.destroy()
+        if choice == 0:
+            try:
+                self.busy = True
+                checkpoint = 0.02
+                for i in self.data.autolimit():
+                    self.view.update_progressbar(i*100)
+                    if i > checkpoint:
+                        checkpoint += 0.02
+                        self.view.update()
+                self.busy = False
+            except ValueError as e:
+                print(e)
+            self.draw_fig()
+
+        elif choice == 1:
+            self.data.crop(fixed_boundaries=(start, end))
+
+        self.current_stage = "binarized"
+        self.draw_fig()
+
+        threshold = self.data.get_settings()["Network threshold"]
+        self.analysis.import_data(self.data, threshold)

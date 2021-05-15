@@ -1,9 +1,8 @@
 import tkinter as tk
 from tkinter import messagebox
 from tkinter import filedialog
-from tkinter.ttk import Progressbar
+from tkinter import ttk
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-import copy
 import webbrowser
 
 
@@ -45,6 +44,9 @@ class View(tk.Tk):
         menubar.add_cascade(label="Import", menu=importmenu)
         importmenu.add_command(label="Import data",
                                command=self.controller.import_data
+                               )
+        importmenu.add_command(label="Import positions",
+                               command=self.controller.import_positions
                                )
         importmenu.add_command(label="Import settings",
                                command=self.controller.import_settings
@@ -119,10 +121,16 @@ class View(tk.Tk):
         aex_button.pack(side=tk.LEFT)
 
         alim_button = tk.Button(topframe, highlightbackground=BG,
-                                text="Autolimit",
-                                command=self.controller.autolimit_click
+                                text="Crop",
+                                command=self.controller.crop_click
                                 )
         alim_button.pack(side=tk.LEFT)
+
+        analysis_button = tk.Button(
+            topframe, highlightbackground=BG, text="Analysis",
+            command=self.controller.analysis_click
+            )
+        analysis_button.pack(side=tk.RIGHT)
 
         # ------------------------------ CANVAS ----------------------------- #
 
@@ -192,9 +200,9 @@ class View(tk.Tk):
 
         self.minsize(width=WIDTH, height=HEIGHT)
 
-        self.progressbar = Progressbar(self, orient=tk.HORIZONTAL,
-                                       length=100, mode='determinate'
-                                       )
+        self.progressbar = ttk.Progressbar(self, orient=tk.HORIZONTAL,
+                                           length=100, mode='determinate'
+                                           )
         self.progressbar.pack(side=tk.BOTTOM, fill=tk.BOTH, expand=tk.NO)
 
     def open_file(self):
@@ -228,7 +236,7 @@ class View(tk.Tk):
             return None
         return filename.name
 
-    def draw_fig(self, fig):
+    def refresh_canvas(self, fig):
         if type(self.canvas) == tk.Canvas:
             self.canvas.destroy()
         else:
@@ -257,7 +265,7 @@ class View(tk.Tk):
             )
 
     def __add_frame(self, parameter, container):
-        if type(parameter) in (int, float):
+        if type(parameter) in (int, float, str):
             e = tk.Entry(container)
             e.pack(side=tk.LEFT)
             e.delete(0, tk.END)
@@ -279,6 +287,87 @@ class View(tk.Tk):
             for key in range(len(parameter)):
                 array.append(self.__add_frame(parameter[key], container))
             return array
+
+    def open_crop_window(self):
+        # Open window
+        self.crop_window = tk.Toplevel()
+        self.crop_window.title("Crop selection")
+
+        # Add upper frame
+        main_frame = tk.Frame(self.crop_window, bg=BG)
+        main_frame.pack(fill=tk.BOTH, expand=tk.YES)
+
+        choice_frame = tk.LabelFrame(main_frame, text="Choose strip option",
+                                     bg=BG, fg=TEXT
+                                     )
+        choice_frame.pack(fill=tk.BOTH, expand=tk.YES)
+
+        border_frame = tk.LabelFrame(main_frame, text="Custom border values",
+                                     bg=BG, fg=TEXT
+                                     )
+        border_frame.pack(fill=tk.BOTH, expand=tk.YES)
+
+        choice_var = tk.IntVar()
+        text = ("Automatic", "Custom")
+        for i in range(2):
+            choice = tk.Checkbutton(choice_frame, text=text[i], onvalue=i,
+                                    bg=BG, fg=TEXT, variable=choice_var
+                                    )
+            choice.pack(side=tk.LEFT)
+
+        start_entry = tk.Entry(border_frame)
+        start_entry.pack(side=tk.TOP)
+        start_entry.delete(0, tk.END)
+        start_entry.insert(0, 0)
+
+        end_entry = tk.Entry(border_frame)
+        end_entry.pack(side=tk.TOP)
+        end_entry.delete(0, tk.END)
+        end_entry.insert(0, self.controller.data.get_time()[-1])
+
+        apply_options_button = tk.Button(
+            main_frame, highlightbackground=BG, text="Apply parameters",
+            command=self.controller.apply_options_click)
+        apply_options_button.pack()
+
+        self.options = (choice_var, start_entry, end_entry)
+
+    def open_analysis_window(self):
+        # Open window
+        self.crop_window = tk.Toplevel()
+        self.crop_window.title("Analysis")
+
+        nb = ttk.Notebook(self.crop_window)
+        # dataframe_tab = ttk.Frame(nb)
+        dynamic_par_tab = ttk.Frame(nb)
+        network_tab = ttk.Frame(nb)
+        network_par_tab = ttk.Frame(nb)
+
+        # nb.add(dataframe_tab, text="Pandas Dataframe")
+        nb.add(dynamic_par_tab, text='Dynamic Analysis')
+        nb.add(network_tab, text='Network Plot')
+        nb.add(network_par_tab, text="Network Parameters")
+        nb.pack(expand=1, fill="both")
+
+        # df = self.controller.analysis.get_dataframe()
+
+        self.draw_fig(self.controller.dynamic_parameters_fig(),
+                      dynamic_par_tab
+                      )
+        self.draw_fig(self.controller.network_fig(), network_tab)
+        self.draw_fig(self.controller.network_parameters_fig(),
+                      network_par_tab
+                      )
+
+    def draw_fig(self, fig, master):
+        canvas = FigureCanvasTkAgg(fig, master=master)
+        canvas.draw()
+        canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
+
+    def positions_warning(self):
+        messagebox.showwarning("Warning",
+                               "Positions not set. Do you want to continue?",
+                               )
 
     def update_progressbar(self, i):
         self.progressbar["value"] = i
