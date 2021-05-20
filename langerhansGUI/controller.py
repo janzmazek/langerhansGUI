@@ -45,9 +45,6 @@ class Controller(object):
         try:
             positions = np.loadtxt(filename)
             self.data.import_positions(positions)
-            self.analysis.import_data(self.data)
-            self.current_stage = "binarized"
-            self.draw_fig()
         except ValueError as e:
             self.view.error(e)
 
@@ -96,8 +93,6 @@ class Controller(object):
         except Exception as exc:
             print("Unsuccessful: {}.".format(exc))
         self.current_stage = "imported"
-        threshold = self.data.get_settings()["Network threshold"]
-        self.analysis.import_data(self.data, threshold)
         self.draw_fig()
 
     def edit_settings(self):
@@ -287,6 +282,8 @@ class Controller(object):
             if not proceed:
                 return
         try:
+            threshold = self.data.get_settings()["Network threshold"]
+            self.analysis.import_data(self.data, threshold)
             self.analysis.to_pandas()
         except ValueError as e:
             self.view.error(e)
@@ -405,16 +402,17 @@ class Controller(object):
         self.draw_fig()
         self.view.settings_window.destroy()
 
-    def __get_values(self, parameter):
+    def __get_values(self, parameter, string=False):
         if type(parameter) not in (dict, list):
-            try:
-                return float(parameter.get())
-            except ValueError:
+            if string:
                 return parameter.get()
+            else:
+                return float(parameter.get())
         elif type(parameter) is dict:
             dictionary = {}
             for key in parameter:
-                dictionary[key] = self.__get_values(parameter[key])
+                string = True if key in ("Islet ID") else False
+                dictionary[key] = self.__get_values(parameter[key], string)
             return dictionary
         elif type(parameter) is list:
             array = []
@@ -448,6 +446,3 @@ class Controller(object):
 
         self.current_stage = "binarized"
         self.draw_fig()
-
-        threshold = self.data.get_settings()["Network threshold"]
-        self.analysis.import_data(self.data, threshold)
