@@ -168,11 +168,12 @@ class Controller(object):
         else:
             self.busy = True
             try:
-                checkpoint = 0.1
+                step = 0.1
+                checkpoint = step
                 for i in self.data.filter_fast():
                     self.view.update_progressbar(i*100)
                     if i > checkpoint:
-                        checkpoint += 0.1
+                        checkpoint += step
                         self.view.update()
                 self.current_stage = "filtered"
                 self.draw_fig()
@@ -189,11 +190,12 @@ class Controller(object):
         else:
             self.busy = True
             try:
-                checkpoint = 0.1
+                step = 0.1
+                checkpoint = step
                 for i in self.data.compute_distributions():
                     self.view.update_progressbar(i*100)
                     if i > checkpoint:
-                        checkpoint += 0.1
+                        checkpoint += step
                         self.view.update()
                 self.current_stage = "distributions"
                 self.draw_fig()
@@ -210,11 +212,12 @@ class Controller(object):
         else:
             self.busy = True
             try:
-                checkpoint = 0.1
+                step = 0.1
+                checkpoint = step
                 for i in self.data.binarize_fast():
                     self.view.update_progressbar(i*100)
                     if i > checkpoint:
-                        checkpoint += 0.1
+                        checkpoint += step
                         self.view.update()
                 self.current_stage = "binarized"
                 self.draw_fig()
@@ -290,6 +293,32 @@ class Controller(object):
             return
         self.view.open_analysis_window()
 
+    def waves_click(self):
+        if self.data.get_positions() is False:
+            self.view.error("Positions not set.")
+        proceed = self.view.warning(
+            "Calculating wave analysis might take a few minutes. Do you want \
+            to proceed?"
+        )
+        if not proceed:
+            return
+        try:
+            threshold = self.data.get_settings()["Network threshold"]
+            self.analysis.import_data(self.data, threshold)
+
+            step = 0.01
+            checkpoint = step
+            for i in self.analysis.detect_waves():
+                self.view.update_progressbar(i*100)
+                if i > checkpoint:
+                    checkpoint += step
+                    self.view.update()
+                self.busy = False
+        except ValueError as e:
+            self.view.error(e)
+            return
+        self.view.open_waves_window()
+
     def __get_fig(self):
         if self.current_stage == "imported":
             fig, (ax1, ax2) = plt.subplots(2, sharex=True, tight_layout=True)
@@ -355,7 +384,7 @@ class Controller(object):
 
     def dynamic_parameters_fig(self):
         dyn_par = ["AD", "AT", "OD", "Ff", "ISI", "ISIV", "TP", "TS"]
-        fig, ax = plt.subplots(ncols=4, nrows=2, figsize=(16, 9))
+        fig, ax = plt.subplots(ncols=4, nrows=2, figsize=(12, 6))
         df = self.analysis.get_dataframe()
         for i in range(2):
             for j in range(4):
@@ -365,27 +394,23 @@ class Controller(object):
                 ax[i, j].set_ylabel('')
         return fig
 
-    def network_fig(self):
-        fig, ax = plt.subplots()
-        self.analysis.draw_network(ax)
-        return fig
-
     def glob_network_parameters_fig(self):
         fig, ax = plt.subplots()
         return fig
 
     def network_parameters_fig(self):
         ind_net_par = ["NDf", "NNDf"]
-        fig, ax = plt.subplots(figsize=(16, 9))
+        fig, (ax1, ax2) = plt.subplots(ncols=2, figsize=(12, 6))
+        self.analysis.draw_network(ax1)
         df = self.analysis.get_dataframe()
         data = df.loc[df["Par ID"].isin(ind_net_par)]
-        sns.boxplot(ax=ax, x="Parameter", y="Value", data=data)
-        ax.set_ylabel('')
+        sns.boxplot(ax=ax2, x="Parameter", y="Value", data=data)
+        ax2.set_ylabel('')
         return fig
 
     def waves_fig(self):
         fig, ax = plt.subplots()
-        self.analysis.plot_events(ax, *self.analysis.characterize_waves())
+        self.analysis.plot_events(ax)
         return fig
 
     def draw_fig(self):

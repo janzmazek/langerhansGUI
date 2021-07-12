@@ -126,6 +126,12 @@ class View(tk.Tk):
                                 )
         alim_button.pack(side=tk.LEFT)
 
+        waves_button = tk.Button(
+            topframe, highlightbackground=BG, text="Waves",
+            command=self.controller.waves_click
+        )
+        waves_button.pack(side=tk.RIGHT)
+
         analysis_button = tk.Button(
             topframe, highlightbackground=BG, text="Analysis",
             command=self.controller.analysis_click
@@ -290,11 +296,11 @@ class View(tk.Tk):
 
     def open_crop_window(self):
         # Open window
-        self.crop_window = tk.Toplevel()
-        self.crop_window.title("Crop selection")
+        self.analysis_window = tk.Toplevel()
+        self.analysis_window.title("Crop selection")
 
         # Add upper frame
-        main_frame = tk.Frame(self.crop_window, bg=BG)
+        main_frame = tk.Frame(self.analysis_window, bg=BG)
         main_frame.pack(fill=tk.BOTH, expand=tk.YES)
 
         choice_frame = tk.LabelFrame(main_frame, text="Choose strip option",
@@ -334,30 +340,30 @@ class View(tk.Tk):
 
     def open_analysis_window(self):
         # Open window
-        self.crop_window = tk.Toplevel()
-        self.crop_window.title("Analysis")
+        self.analysis_window = tk.Toplevel()
+        self.analysis_window.title("Parameter analysis")
 
-        nb = ttk.Notebook(self.crop_window)
-        # dataframe_tab = ttk.Frame(nb)
+        nb = ttk.Notebook(self.analysis_window)
         dynamic_par_tab = ttk.Frame(nb)
-        network_tab = ttk.Frame(nb)
         network_par_tab = ttk.Frame(nb)
 
-        # nb.add(dataframe_tab, text="Pandas Dataframe")
         nb.add(dynamic_par_tab, text='Dynamic Analysis')
-        nb.add(network_tab, text='Network Plot')
-        nb.add(network_par_tab, text="Network Parameters")
+        nb.add(network_par_tab, text='Network Plot')
         nb.pack(expand=1, fill="both")
-
-        # df = self.controller.analysis.get_dataframe()
 
         self.draw_fig(self.controller.dynamic_parameters_fig(),
                       dynamic_par_tab
                       )
-        self.draw_fig(self.controller.network_fig(), network_tab)
         self.draw_fig(self.controller.network_parameters_fig(),
                       network_par_tab
                       )
+
+    def open_waves_window(self):
+        # Open window
+        self.waves_window = tk.Toplevel()
+        self.waves_window.title("Wave analysis")
+
+        self.draw_fig(self.controller.waves_fig(), self.waves_window)
 
     def draw_fig(self, fig, master):
         canvas = FigureCanvasTkAgg(fig, master=master)
