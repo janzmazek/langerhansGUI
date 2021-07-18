@@ -8,9 +8,10 @@ import seaborn as sns
 class Controller(object):
     """docstring for Controller."""
 
-    def __init__(self, data, analysis, view):
+    def __init__(self, data, analysis, waves, view):
         self.data = data
         self.analysis = analysis
+        self.waves = waves
         self.view = view
 
         self.view.register(self)
@@ -278,6 +279,9 @@ class Controller(object):
         self.current_stage = "binarized"
 
     def analysis_click(self):
+        if not self.data.is_analyzed() or self.busy:
+            self.view.error("Data is not analyzed.")
+            return
         if self.data.get_positions() is False:
             proceed = self.view.warning(
                 "Positions not set. Do you want to proceed?"
@@ -294,30 +298,59 @@ class Controller(object):
         self.view.open_analysis_window()
 
     def waves_click(self):
+        if not self.data.is_analyzed() or self.busy:
+            self.view.error("Data is not analyzed.")
+            return
         if self.data.get_positions() is False:
             self.view.error("Positions not set.")
-        proceed = self.view.warning(
-            "Calculating wave analysis might take a few minutes. Do you want \
-            to proceed?"
-        )
-        if not proceed:
             return
         try:
-            threshold = self.data.get_settings()["Network threshold"]
-            self.analysis.import_data(self.data, threshold)
-
-            step = 0.01
-            checkpoint = step
-            for i in self.analysis.detect_waves():
-                self.view.update_progressbar(i*100)
-                if i > checkpoint:
-                    checkpoint += step
-                    self.view.update()
-                self.busy = False
+            self.waves.import_data(self.data)
         except ValueError as e:
             self.view.error(e)
             return
         self.view.open_waves_window()
+
+    def detection_click(self):
+        if self.busy is True or self.waves.get_act_sig() is not False:
+            return
+        proceed = self.view.warning(
+            "Wave detection might take a few minutes. Do you want to proceed?"
+            )
+        if not proceed:
+            return
+        self.busy = True
+        try:
+            step = 0.01
+            checkpoint = step
+            for i in self.waves.detect_waves():
+                self.view.update_waves_progressbar(i*100)
+                if i > checkpoint:
+                    checkpoint += step
+                    self.view.update()
+        except ValueError as e:
+            self.view.error(e)
+        self.busy = False
+
+        fig, ax = plt.subplots(figsize=(16, 9))
+        self.waves.plot_act_sig(ax)
+        self.view.draw_fig(fig, self.view.detection_frame)
+
+    def characterization_click(self):
+        if self.busy is True or self.waves.get_all_events() is not False:
+            return
+        self.busy = True
+        try:
+            step = 0.01
+            checkpoint = step
+            for i in self.waves.characterize_waves():
+                self.view.update_waves_progressbar(i*100)
+                if i > checkpoint:
+                    checkpoint += step
+                    self.view.update()
+        except ValueError as e:
+            self.view.error(e)
+        self.busy = False
 
     def __get_fig(self):
         if self.current_stage == "imported":
@@ -408,7 +441,7 @@ class Controller(object):
         ax2.set_ylabel('')
         return fig
 
-    def waves_fig(self):
+    def draw_waves_fig(self):
         fig, ax = plt.subplots()
         self.analysis.plot_events(ax)
         return fig

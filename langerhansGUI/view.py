@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import messagebox
 from tkinter import filedialog
 from tkinter import ttk
+from langerhans import analysis
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import webbrowser
 
@@ -19,6 +20,8 @@ WELCOME_TEXT = "WELCOME\n \
 To start analyzing, load a data file (a 2-D matrix readable by np.loadtxt).\n \
 Cells should be rows of the matrix, time should be columns of the matrix.\n \
 You can save or load current state in the form of a pickle object."
+
+WAVES_TEXT = "..."
 
 
 class View(tk.Tk):
@@ -88,12 +91,12 @@ class View(tk.Tk):
 
         # ------------------------------ TOOLBAR ---------------------------- #
 
-        self.toolbar = tk.LabelFrame(self, text="Preprocessing Tools",
-                                     padx=5, pady=5, bg=BG, fg=TEXT
-                                     )
-        self.toolbar.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.NO)
+        toolbar = tk.LabelFrame(self, text="Preprocessing Tools",
+                                padx=5, pady=5, bg=BG, fg=TEXT
+                                )
+        toolbar.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.NO)
 
-        topframe = tk.Frame(self.toolbar, bg=BG)
+        topframe = tk.Frame(toolbar, bg=BG)
         topframe.pack(anchor="center")
 
         flt_button = tk.Button(topframe, highlightbackground=BG,
@@ -136,7 +139,7 @@ class View(tk.Tk):
             topframe, highlightbackground=BG, text="Analysis",
             command=self.controller.analysis_click
             )
-        analysis_button.pack(side=tk.RIGHT)
+        analysis_button.pack(side=tk.RIGHT, padx=(50, 0))
 
         # ------------------------------ CANVAS ----------------------------- #
 
@@ -162,20 +165,21 @@ class View(tk.Tk):
                                   command=self.controller.import_object
                                   )
         object_button.pack(side=tk.RIGHT, padx=20, pady=20)
+
         # ------------------------------ NAVBAR ----------------------------- #
 
-        self.navbar = tk.LabelFrame(self, text="Navigation",
-                                    padx=5, pady=5, bg=BG, fg=TEXT
-                                    )
-        self.navbar.pack(side=tk.BOTTOM, fill=tk.BOTH, expand=tk.NO)
+        navbar = tk.LabelFrame(self, text="Navigation",
+                               padx=5, pady=5, bg=BG, fg=TEXT
+                               )
+        navbar.pack(side=tk.BOTTOM, fill=tk.BOTH, expand=tk.NO)
 
-        exclude_button = tk.Button(self.navbar, highlightbackground=BG,
+        exclude_button = tk.Button(navbar, highlightbackground=BG,
                                    text="(↓) exclude",
                                    command=self.controller.exclude_click
                                    )
         exclude_button.pack(side=tk.LEFT)
 
-        bottomframe = tk.Frame(self.navbar, bg=BG)
+        bottomframe = tk.Frame(navbar, bg=BG)
         bottomframe.pack(side=tk.LEFT, fill="none", expand=True)
 
         prev_button = tk.Button(bottomframe, highlightbackground=BG,
@@ -193,11 +197,18 @@ class View(tk.Tk):
                                 )
         next_button.pack(side=tk.LEFT)
 
-        unex_button = tk.Button(self.navbar, highlightbackground=BG,
+        unex_button = tk.Button(navbar, highlightbackground=BG,
                                 text="unexclude (↑)",
                                 command=self.controller.unexclude_click
                                 )
         unex_button.pack(side=tk.RIGHT)
+
+        # --------------------------- PROGRESS BAR -------------------------- #
+
+        self.progressbar = ttk.Progressbar(self, orient=tk.HORIZONTAL,
+                                           length=100, mode='determinate'
+                                           )
+        self.progressbar.pack(side=tk.BOTTOM, fill=tk.BOTH, expand=tk.NO)
 
         self.bind("<Left>", lambda e: self.controller.previous_click())
         self.bind("<Right>", lambda e: self.controller.next_click())
@@ -205,11 +216,6 @@ class View(tk.Tk):
         self.bind("<Down>", lambda e: self.controller.exclude_click())
 
         self.minsize(width=WIDTH, height=HEIGHT)
-
-        self.progressbar = ttk.Progressbar(self, orient=tk.HORIZONTAL,
-                                           length=100, mode='determinate'
-                                           )
-        self.progressbar.pack(side=tk.BOTTOM, fill=tk.BOTH, expand=tk.NO)
 
     def open_file(self):
         filename = filedialog.askopenfilename(
@@ -296,11 +302,11 @@ class View(tk.Tk):
 
     def open_crop_window(self):
         # Open window
-        self.analysis_window = tk.Toplevel()
-        self.analysis_window.title("Crop selection")
+        self.crop_window = tk.Toplevel()
+        self.crop_window.title("Crop selection")
 
         # Add upper frame
-        main_frame = tk.Frame(self.analysis_window, bg=BG)
+        main_frame = tk.Frame(self.crop_window, bg=BG)
         main_frame.pack(fill=tk.BOTH, expand=tk.YES)
 
         choice_frame = tk.LabelFrame(main_frame, text="Choose strip option",
@@ -338,12 +344,27 @@ class View(tk.Tk):
 
         self.options = (choice_var, start_entry, end_entry)
 
+    def draw_fig(self, fig, master):
+        canvas = FigureCanvasTkAgg(fig, master=master)
+        canvas.draw()
+        canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
+
     def open_analysis_window(self):
         # Open window
-        self.analysis_window = tk.Toplevel()
-        self.analysis_window.title("Parameter analysis")
+        analysis_window = tk.Toplevel()
+        analysis_window.title("Parameter analysis")
+        analysis_window.minsize(width=WIDTH, height=HEIGHT)
 
-        nb = ttk.Notebook(self.analysis_window)
+        # # Status
+        # status_frame = tk.LabelFrame(analysis_window, text="Tools & Status",
+        #                              background=BG, foreground=TEXT
+        #                              )
+        # status_frame.pack(expand=1, fill="both", side=tk.LEFT)
+
+        # Notebook
+        notebook_frame = tk.LabelFrame(analysis_window, text="Plots")
+        notebook_frame.pack(expand=1, fill="both", side=tk.LEFT)
+        nb = ttk.Notebook(notebook_frame)
         dynamic_par_tab = ttk.Frame(nb)
         network_par_tab = ttk.Frame(nb)
 
@@ -360,15 +381,54 @@ class View(tk.Tk):
 
     def open_waves_window(self):
         # Open window
-        self.waves_window = tk.Toplevel()
-        self.waves_window.title("Wave analysis")
+        waves_window = tk.Toplevel()
+        waves_window.title("Wave analysis")
+        waves_window.minsize(width=WIDTH, height=HEIGHT)
 
-        self.draw_fig(self.controller.waves_fig(), self.waves_window)
+        upper_frame = tk.Frame(waves_window)
+        upper_frame.pack(expand=1, fill="both", side=tk.TOP)
 
-    def draw_fig(self, fig, master):
-        canvas = FigureCanvasTkAgg(fig, master=master)
-        canvas.draw()
-        canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
+        # Status
+        status_frame = tk.LabelFrame(upper_frame, text="Tools & Status",
+                                     background=BG, foreground=TEXT
+                                     )
+        status_frame.pack(expand=1, fill="both", side=tk.LEFT)
+
+        det_button = tk.Button(status_frame, text="Detect Waves",
+                               highlightbackground=BG,
+                               command=self.controller.detection_click
+                               )
+        det_button.pack(side=tk.TOP)
+
+        char_button = tk.Button(status_frame, text="Characterize Waves",
+                                highlightbackground=BG,
+                                command=self.controller.characterization_click
+                                )
+        char_button.pack(side=tk.TOP)
+
+        # Notebook
+        notebook_frame = tk.LabelFrame(upper_frame, text="Plots")
+        notebook_frame.pack(expand=1, fill="both", side=tk.LEFT)
+        nb = ttk.Notebook(notebook_frame)
+        detection_tab = ttk.Frame(nb)
+        characterization_tab = ttk.Frame(nb)
+
+        nb.add(detection_tab, text="Active Signal")
+        nb.add(characterization_tab, text="Wave characterization")
+        nb.pack(expand=1, fill="both")
+
+        # Canvas
+        self.detection_frame = tk.Frame(detection_tab)
+        self.detection_frame.pack(expand=1, fill="both")
+
+        self.characterization_frame = tk.Frame(characterization_tab)
+        self.characterization_frame.pack(expand=1, fill="both")
+
+        self.waves_progressbar = ttk.Progressbar(waves_window,
+                                                 orient=tk.HORIZONTAL,
+                                                 length=100, mode='determinate'
+                                                 )
+        self.waves_progressbar.pack(side=tk.BOTTOM, fill=tk.BOTH, expand=tk.NO)
 
     def warning(self, message):
         return messagebox.askyesno("Do you want to proceed?", message)
@@ -378,3 +438,6 @@ class View(tk.Tk):
 
     def update_progressbar(self, i):
         self.progressbar["value"] = i
+
+    def update_waves_progressbar(self, i):
+        self.waves_progressbar["value"] = i
