@@ -4,6 +4,7 @@ import pickle
 import matplotlib.pyplot as plt
 import seaborn as sns
 import os
+import threading
 
 
 class Controller(object):
@@ -19,7 +20,32 @@ class Controller(object):
 
         self.current_number = 0
         self.current_stage = 0
+        self.thread = {"main": False, "analysis": False, "waves": False}
         self.busy = False
+        self.progress = False
+
+    def __start_thread(self, next_func=False, window="main",
+                       *args, **kwargs):
+        self.busy = True
+        self.thread[window] = threading.Thread(*args, **kwargs)
+        self.thread[window].start()
+        self.view.config(cursor="wait")
+        self.__check_completed(next_func, window)
+
+    def __check_completed(self, next_func, window):
+        if self.thread[window].is_alive():
+            self.view.update_progressbar(self.progress*100, window)
+            self.view.after(
+                50, lambda: self.__check_completed(next_func, window)
+                )
+        else:
+            self.view.config(cursor="")
+            self.progress = 100
+            self.busy = False
+            if next_func is False:
+                self.draw_fig()
+            else:
+                next_func()
 
 # ---------------------------- Menu click methods --------------------------- #
     def import_data(self):
@@ -28,13 +54,15 @@ class Controller(object):
         filename = self.view.open_file()
         if filename is None:
             return
+        self.__start_thread(target=self.import_data_thread, args=(filename,))
+
+    def import_data_thread(self, filename):
         try:
             if self.current_stage != 0:
                 self.data.reset_computations()
             series = np.loadtxt(filename)
             self.data.import_data(series)
             self.current_stage = "imported"
-            self.draw_fig()
         except ValueError as e:
             self.view.error(e)
 
@@ -132,7 +160,6 @@ class Controller(object):
         fig, ax = plt.subplots()
         checkpoint = 0.05
         for i in self.data.plot_events(ax):
-            print(i)
             self.view.update_progressbar(i*100)
             if i > checkpoint:
                 checkpoint += 0.05
@@ -168,20 +195,15 @@ class Controller(object):
             self.current_stage = "filtered"
             self.draw_fig()
         else:
-            self.busy = True
-            try:
-                step = 0.1
-                checkpoint = step
-                for i in self.data.filter_fast():
-                    self.view.update_progressbar(i*100)
-                    if i > checkpoint:
-                        checkpoint += step
-                        self.view.update()
-                self.current_stage = "filtered"
-                self.draw_fig()
-            except ValueError as e:
-                self.view.error(e)
-            self.busy = False
+            self.__start_thread(target=self.filter_click_thread)
+
+    def filter_click_thread(self):
+        try:
+            for i in self.data.filter_fast():
+                self.progress = i
+            self.current_stage = "filtered"
+        except ValueError as e:
+            self.view.error(e)
 
     def distributions_click(self):
         if self.current_stage == 0 or self.busy:
@@ -190,20 +212,15 @@ class Controller(object):
             self.current_stage = "distributions"
             self.draw_fig()
         else:
-            self.busy = True
-            try:
-                step = 0.1
-                checkpoint = step
-                for i in self.data.compute_distributions():
-                    self.view.update_progressbar(i*100)
-                    if i > checkpoint:
-                        checkpoint += step
-                        self.view.update()
-                self.current_stage = "distributions"
-                self.draw_fig()
-            except ValueError as e:
-                self.view.error(e)
-            self.busy = False
+            self.__start_thread(target=self.distributions_click_thread)
+
+    def distributions_click_thread(self):
+        try:
+            for i in self.data.compute_distributions():
+                self.progress = i
+            self.current_stage = "distributions"
+        except ValueError as e:
+            self.view.error(e)
 
     def binarize_click(self):
         if self.current_stage == 0 or self.busy:
@@ -212,20 +229,15 @@ class Controller(object):
             self.current_stage = "binarized"
             self.draw_fig()
         else:
-            self.busy = True
-            try:
-                step = 0.1
-                checkpoint = step
-                for i in self.data.binarize_fast():
-                    self.view.update_progressbar(i*100)
-                    if i > checkpoint:
-                        checkpoint += step
-                        self.view.update()
-                self.current_stage = "binarized"
-                self.draw_fig()
-            except ValueError as e:
-                self.view.error(e)
-            self.busy = False
+            self.__start_thread(target=self.binarize_click_thread)
+
+    def binarize_click_thread(self):
+        try:
+            for i in self.data.binarize_fast():
+                self.progress = i
+            self.current_stage = "binarized"
+        except ValueError as e:
+            self.view.error(e)
 
     def previous_click(self):
         if self.current_stage == 0:
@@ -279,9 +291,33 @@ class Controller(object):
         self.view.open_crop_window()
         self.current_stage = "binarized"
 
+    def apply_options_click(self):
+        choice_var, start_entry, end_entry = self.view.options
+        choice = choice_var.get()
+        start, end = float(start_entry.get()), float(end_entry.get())
+
+        self.view.crop_window.destroy()
+        if choice == 0:
+            self.__start_thread(target=self.autolimit_thread)
+
+        elif choice == 1:
+            self.data.crop(fixed_boundaries=(start, end))
+
+    def autolimit_thread(self):
+        try:
+            for i in self.data.autolimit():
+                self.progress = i
+                print(i)
+        except ValueError as e:
+            self.view.error(e)
+        self.current_stage = "binarized"
+
     def analysis_click(self):
-        if not self.data.is_analyzed() or self.busy:
-            self.view.error("Data is not analyzed.")
+        if self.busy:
+            self.view.error("Thread busy.")
+            return
+        if not self.data.is_analyzed():
+            self.view.error("Data not analyzed.")
             return
         if self.data.get_positions() is False:
             proceed = self.view.warning(
@@ -290,24 +326,33 @@ class Controller(object):
             if not proceed:
                 return
         self.view.open_analysis_window()
-        self.view.update()
+        self.__start_thread(target=self.analysis_click_thread,
+                            next_func=self.analysis_click_after
+                            )
+
+    def analysis_click_thread(self):
         try:
             threshold = self.data.get_settings()["Network threshold"]
             self.analysis.import_data(self.data, threshold)
             self.analysis.to_pandas()
-            self.view.draw_fig(self.dynamic_parameters_fig(),
-                               self.view.dynamic_par_tab
-                               )
-            self.view.draw_fig(self.network_parameters_fig(),
-                               self.view.network_par_tab
-                               )
         except ValueError as e:
             self.view.error(e)
             return
 
+    def analysis_click_after(self):
+        self.view.draw_fig(self.dynamic_parameters_fig(),
+                           self.view.dynamic_par_tab
+                           )
+        self.view.draw_fig(self.network_parameters_fig(),
+                           self.view.network_par_tab
+                           )
+
     def waves_click(self):
-        if not self.data.is_analyzed() or self.busy:
-            self.view.error("Data is not analyzed.")
+        if self.busy:
+            self.view.error("Thread busy.")
+            return
+        if not self.data.is_analyzed():
+            self.view.error("Data not analyzed.")
             return
         if self.data.get_positions() is False:
             self.view.error("Positions not set.")
@@ -318,47 +363,39 @@ class Controller(object):
             self.view.error(e)
             return
         self.view.open_waves_window()
+        self.__start_thread(target=self.wave_detection,
+                            next_func=self.after_wave_detection,
+                            window="waves"
+                            )
 
-    def detection_click(self):
-        if self.busy is True or self.waves.get_act_sig() is not False:
-            return
-        proceed = self.view.warning(
-            "Wave detection might take a few minutes. Do you want to proceed?"
-            )
-        if not proceed:
-            return
-        self.busy = True
+    def wave_detection(self):
         try:
-            step = 0.01
-            checkpoint = step
             for i in self.waves.detect_waves():
-                self.view.update_waves_progressbar(i*100)
-                if i > checkpoint:
-                    checkpoint += step
-                    self.view.update()
+                self.progress = i
         except ValueError as e:
             self.view.error(e)
-        self.busy = False
 
+    def after_wave_detection(self):
         fig, ax = plt.subplots(figsize=(16, 9))
         self.waves.plot_act_sig(ax)
         self.view.draw_fig(fig, self.view.detection_frame)
 
-    def characterization_click(self):
-        if self.busy is True or self.waves.get_all_events() is not False:
-            return
-        self.busy = True
+        self.__start_thread(target=self.wave_characterization,
+                            next_func=self.after_wave_characterization,
+                            window="waves"
+                            )
+
+    def wave_characterization(self):
         try:
-            step = 0.01
-            checkpoint = step
             for i in self.waves.characterize_waves():
-                self.view.update_waves_progressbar(i*100)
-                if i > checkpoint:
-                    checkpoint += step
-                    self.view.update()
+                self.progress = i
         except ValueError as e:
             self.view.error(e)
-        self.busy = False
+
+    def after_wave_characterization(self):
+        fig, ax = plt.subplots(figsize=(16, 9))
+        ax.plot(np.linspace(0, 10, 100), np.sin(np.linspace(0, 10, 100)))
+        self.view.draw_fig(fig, self.view.characterization_frame)
 
     def export_dataframe_click(self):
         try:
@@ -503,30 +540,3 @@ class Controller(object):
             for key in parameter:
                 array.append(self.__get_values(key))
             return array
-
-    def apply_options_click(self):
-        choice_var, start_entry, end_entry = self.view.options
-        choice = choice_var.get()
-        start, end = float(start_entry.get()), float(end_entry.get())
-
-        self.view.crop_window.destroy()
-        if choice == 0:
-            self.busy = True
-            try:
-                checkpoint = 0.02
-                for i in self.data.autolimit():
-                    self.view.update_progressbar(i*100)
-                    if i > checkpoint:
-                        checkpoint += 0.02
-                        self.view.update()
-                self.draw_fig()
-            except ValueError as e:
-                self.view.error(e)
-            self.busy = False
-            return
-
-        elif choice == 1:
-            self.data.crop(fixed_boundaries=(start, end))
-
-        self.current_stage = "binarized"
-        self.draw_fig()

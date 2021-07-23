@@ -225,6 +225,8 @@ class View(tk.Tk):
                               foreground="black"
                               )
 
+        self.protocol("WM_DELETE_WINDOW", self.close_main_window)
+
     def open_file(self):
         filename = filedialog.askopenfilename(
             title="Select file",
@@ -359,12 +361,13 @@ class View(tk.Tk):
 
     def open_analysis_window(self):
         # Open window
-        analysis_window = tk.Toplevel()
-        analysis_window.title("Parameter analysis")
-        analysis_window.minsize(width=WIDTH, height=HEIGHT)
+        self.analysis_window = tk.Toplevel()
+        self.analysis_window.title("Parameter analysis")
+        self.analysis_window.minsize(width=WIDTH, height=HEIGHT)
 
         # Status
-        status_frame = tk.LabelFrame(analysis_window, text="Tools & Status",
+        status_frame = tk.LabelFrame(self.analysis_window,
+                                     text="Tools & Status",
                                      background=BG, foreground=TEXT
                                      )
         status_frame.pack(expand=1, fill="both", side=tk.LEFT)
@@ -387,7 +390,7 @@ class View(tk.Tk):
         export_dataframe_button.pack()
 
         # Notebook
-        notebook_frame = tk.LabelFrame(analysis_window, text="Plots")
+        notebook_frame = tk.LabelFrame(self.analysis_window, text="Plots")
         notebook_frame.pack(expand=1, fill="both", side=tk.LEFT)
         nb = ttk.Notebook(notebook_frame)
         self.dynamic_par_tab = ttk.Frame(nb)
@@ -397,13 +400,17 @@ class View(tk.Tk):
         nb.add(self.network_par_tab, text='Network Parameters')
         nb.pack(expand=1, fill="both")
 
+        self.analysis_window.protocol(
+            "WM_DELETE_WINDOW", self.close_analysis_window
+            )
+
     def open_waves_window(self):
         # Open window
-        waves_window = tk.Toplevel()
-        waves_window.title("Wave analysis")
-        waves_window.minsize(width=WIDTH, height=HEIGHT)
+        self.waves_window = tk.Toplevel()
+        self.waves_window.title("Wave analysis")
+        self.waves_window.minsize(width=WIDTH, height=HEIGHT)
 
-        upper_frame = tk.Frame(waves_window)
+        upper_frame = tk.Frame(self.waves_window)
         upper_frame.pack(expand=1, fill="both", side=tk.TOP)
 
         # Status
@@ -412,41 +419,24 @@ class View(tk.Tk):
                                      )
         status_frame.pack(expand=1, fill="both", side=tk.LEFT)
 
-        det_button = tk.Button(status_frame, text="Detect Waves",
-                               highlightbackground=BG,
-                               command=self.controller.detection_click
-                               )
-        det_button.pack(side=tk.TOP)
-
-        char_button = tk.Button(status_frame, text="Characterize Waves",
-                                highlightbackground=BG,
-                                command=self.controller.characterization_click
-                                )
-        char_button.pack(side=tk.TOP)
-
         # Notebook
         notebook_frame = tk.LabelFrame(upper_frame, text="Plots")
         notebook_frame.pack(expand=1, fill="both", side=tk.LEFT)
         nb = ttk.Notebook(notebook_frame)
-        detection_tab = ttk.Frame(nb)
-        characterization_tab = ttk.Frame(nb)
+        self.detection_tab = ttk.Frame(nb)
+        self.characterization_tab = ttk.Frame(nb)
 
-        nb.add(detection_tab, text="Active Signal")
-        nb.add(characterization_tab, text="Wave characterization")
+        nb.add(self.detection_tab, text="Active Signal")
+        nb.add(self.characterization_tab, text="Wave characterization")
         nb.pack(expand=1, fill="both")
 
-        # Canvas
-        self.detection_frame = tk.Frame(detection_tab)
-        self.detection_frame.pack(expand=1, fill="both")
-
-        self.characterization_frame = tk.Frame(characterization_tab)
-        self.characterization_frame.pack(expand=1, fill="both")
-
-        self.waves_progressbar = ttk.Progressbar(waves_window,
+        self.waves_progressbar = ttk.Progressbar(self.waves_window,
                                                  orient=tk.HORIZONTAL,
                                                  length=100, mode='determinate'
                                                  )
         self.waves_progressbar.pack(side=tk.BOTTOM, fill=tk.BOTH, expand=tk.NO)
+
+        self.waves_window.protocol("WM_DELETE_WINDOW", self.close_waves_window)
 
     def warning(self, message):
         return messagebox.askyesno("Do you want to proceed?", message)
@@ -454,8 +444,20 @@ class View(tk.Tk):
     def error(self, e):
         messagebox.showerror("Error", e)
 
-    def update_progressbar(self, i):
-        self.progressbar["value"] = i
+    def update_progressbar(self, i, window="main"):
+        if window == "main":
+            self.progressbar["value"] = i
+        elif window == "waves":
+            self.waves_progressbar["value"] = i
 
-    def update_waves_progressbar(self, i):
-        self.waves_progressbar["value"] = i
+    def close_main_window(self):
+        if messagebox.askokcancel("Quit", "Do you want to quit?"):
+            self.destroy()
+
+    def close_analysis_window(self):
+        if messagebox.askokcancel("Quit", "Do you want to quit?"):
+            self.analysis_window.destroy()
+
+    def close_waves_window(self):
+        if messagebox.askokcancel("Quit", "Do you want to quit?"):
+            self.waves_window.destroy()
