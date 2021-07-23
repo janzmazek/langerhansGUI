@@ -32,6 +32,7 @@ class View(tk.Tk):
         self.title("Analysis of Calcium Signals")
 
         self.controller = None
+        self.window = {"analysis": False, "waves": False}
 
     def register(self, controller):
         self.controller = controller
@@ -361,13 +362,15 @@ class View(tk.Tk):
 
     def open_analysis_window(self):
         # Open window
-        self.analysis_window = tk.Toplevel()
-        self.analysis_window.title("Parameter analysis")
-        self.analysis_window.minsize(width=WIDTH, height=HEIGHT)
+        self.window["analysis"] = tk.Toplevel()
+        self.window["analysis"].title("Parameter analysis")
+        self.window["analysis"].minsize(width=WIDTH, height=HEIGHT)
+
+        upper_frame = tk.Frame(self.window["analysis"])
+        upper_frame.pack(expand=1, fill="both", side=tk.TOP)
 
         # Status
-        status_frame = tk.LabelFrame(self.analysis_window,
-                                     text="Tools & Status",
+        status_frame = tk.LabelFrame(upper_frame, text="Tools & Status",
                                      background=BG, foreground=TEXT
                                      )
         status_frame.pack(expand=1, fill="both", side=tk.LEFT)
@@ -377,7 +380,7 @@ class View(tk.Tk):
                   Positions set: {}".format(
             self.controller.data.get_cells(),
             self.controller.data.get_good_cells().sum(),
-            "False" if self.controller.analysis.get_positions() is False
+            "False" if self.controller.data.get_positions() is False
             else "True"
         )
         info = tk.Label(status_frame, bg=BG, fg=WHITE, text=status)
@@ -390,7 +393,7 @@ class View(tk.Tk):
         export_dataframe_button.pack()
 
         # Notebook
-        notebook_frame = tk.LabelFrame(self.analysis_window, text="Plots")
+        notebook_frame = tk.LabelFrame(upper_frame, text="Plots")
         notebook_frame.pack(expand=1, fill="both", side=tk.LEFT)
         nb = ttk.Notebook(notebook_frame)
         self.dynamic_par_tab = ttk.Frame(nb)
@@ -400,17 +403,25 @@ class View(tk.Tk):
         nb.add(self.network_par_tab, text='Network Parameters')
         nb.pack(expand=1, fill="both")
 
-        self.analysis_window.protocol(
+        self.analysis_progressbar = ttk.Progressbar(
+            self.window["analysis"], orient=tk.HORIZONTAL, length=100,
+            mode='determinate'
+            )
+        self.analysis_progressbar.pack(
+            side=tk.BOTTOM, fill=tk.BOTH, expand=tk.NO
+            )
+
+        self.window["analysis"].protocol(
             "WM_DELETE_WINDOW", self.close_analysis_window
             )
 
     def open_waves_window(self):
         # Open window
-        self.waves_window = tk.Toplevel()
-        self.waves_window.title("Wave analysis")
-        self.waves_window.minsize(width=WIDTH, height=HEIGHT)
+        self.window["waves"] = tk.Toplevel()
+        self.window["waves"].title("Wave analysis")
+        self.window["waves"].minsize(width=WIDTH, height=HEIGHT)
 
-        upper_frame = tk.Frame(self.waves_window)
+        upper_frame = tk.Frame(self.window["waves"])
         upper_frame.pack(expand=1, fill="both", side=tk.TOP)
 
         # Status
@@ -430,13 +441,15 @@ class View(tk.Tk):
         nb.add(self.characterization_tab, text="Wave characterization")
         nb.pack(expand=1, fill="both")
 
-        self.waves_progressbar = ttk.Progressbar(self.waves_window,
+        self.waves_progressbar = ttk.Progressbar(self.window["waves"],
                                                  orient=tk.HORIZONTAL,
                                                  length=100, mode='determinate'
                                                  )
         self.waves_progressbar.pack(side=tk.BOTTOM, fill=tk.BOTH, expand=tk.NO)
 
-        self.waves_window.protocol("WM_DELETE_WINDOW", self.close_waves_window)
+        self.window["waves"].protocol("WM_DELETE_WINDOW",
+                                      self.close_waves_window
+                                      )
 
     def warning(self, message):
         return messagebox.askyesno("Do you want to proceed?", message)
@@ -444,20 +457,35 @@ class View(tk.Tk):
     def error(self, e):
         messagebox.showerror("Error", e)
 
-    def update_progressbar(self, i, window="main"):
+    def update_progressbar(self, window="main"):
         if window == "main":
-            self.progressbar["value"] = i
+            self.progressbar["value"] = self.controller.progress*100
+        elif window == "analysis":
+            self.analysis_progressbar["value"] = self.controller.progress*100
         elif window == "waves":
-            self.waves_progressbar["value"] = i
+            self.waves_progressbar["value"] = self.controller.progress*100
 
     def close_main_window(self):
         if messagebox.askokcancel("Quit", "Do you want to quit?"):
+            if self.controller.thread["main"].is_alive():
+                self.controller.thread["main"].stop()
+                self.controller.thread["main"].join()
             self.destroy()
 
     def close_analysis_window(self):
         if messagebox.askokcancel("Quit", "Do you want to quit?"):
-            self.analysis_window.destroy()
+            if self.controller.thread["analysis"].is_alive():
+                self.controller.thread["analysis"].stop()
+                self.controller.thread["waves"].stop()
+                self.controller.thread["analysis"].stop()
+                self.controller.thread["analysis"].join()
+            self.window["analysis"].destroy()
+            self.window["analysis"] = False
 
     def close_waves_window(self):
         if messagebox.askokcancel("Quit", "Do you want to quit?"):
-            self.waves_window.destroy()
+            if self.controller.thread["waves"].is_alive():
+                self.controller.thread["waves"].stop()
+                self.controller.thread["waves"].join()
+            self.window["waves"].destroy()
+            self.window["waves"] = False

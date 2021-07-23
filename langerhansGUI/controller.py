@@ -7,6 +7,22 @@ import os
 import threading
 
 
+class StoppableThread(threading.Thread):
+    """Thread class with a stop() method. The thread itself has to check
+    regularly for the stopped() condition."""
+
+    def __init__(self,  *args, **kwargs):
+        super(StoppableThread, self).__init__(*args, **kwargs)
+        self._stop_event = threading.Event()
+
+    def stop(self):
+        print("stopped")
+        self._stop_event.set()
+
+    def stopped(self):
+        return self._stop_event.is_set()
+
+
 class Controller(object):
     """docstring for Controller."""
 
@@ -20,36 +36,47 @@ class Controller(object):
 
         self.current_number = 0
         self.current_stage = 0
-        self.thread = {"main": False, "analysis": False, "waves": False}
-        self.busy = False
-        self.progress = False
+        self.thread = {"main": StoppableThread(),
+                       "analysis": StoppableThread(),
+                       "waves": StoppableThread()
+                       }
+        self.progress = 0
 
     def __start_thread(self, next_func=False, window="main",
                        *args, **kwargs):
-        self.busy = True
-        self.thread[window] = threading.Thread(*args, **kwargs)
+        self.progress = 0
+        self.view.update_progressbar(window)
+        self.thread[window] = StoppableThread(*args, **kwargs)
         self.thread[window].start()
         self.view.config(cursor="wait")
         self.__check_completed(next_func, window)
 
     def __check_completed(self, next_func, window):
+        # Check if window has been closed
+        if window in ("waves", "analysis"):
+            if self.view.window[window] is False:
+                self.view.config(cursor="")
+                self.progress = 0
+                return
+        # If window was not closed, check if thread is alive and update
+        # progressbar
         if self.thread[window].is_alive():
-            self.view.update_progressbar(self.progress*100, window)
+            self.view.update_progressbar(window)
             self.view.after(
                 50, lambda: self.__check_completed(next_func, window)
                 )
         else:
             self.view.config(cursor="")
-            self.progress = 100
-            self.busy = False
-            if next_func is False:
+            self.progress = 1
+            self.view.update_progressbar(window)
+            if window == "main":
                 self.draw_fig()
             else:
                 next_func()
 
 # ---------------------------- Menu click methods --------------------------- #
     def import_data(self):
-        if self.busy:
+        if self.thread["main"].is_alive():
             return
         filename = self.view.open_file()
         if filename is None:
@@ -67,7 +94,7 @@ class Controller(object):
             self.view.error(e)
 
     def import_positions(self):
-        if self.busy or self.current_stage == 0:
+        if self.thread["main"].is_alive() or self.current_stage == 0:
             return
         filename = self.view.open_file()
         if filename is None:
@@ -79,7 +106,7 @@ class Controller(object):
             self.view.error(e)
 
     def import_settings(self):
-        if self.current_stage == 0 or self.busy:
+        if self.thread["main"].is_alive() or self.current_stage == 0:
             return
         filename = self.view.open_file()
         if filename is None:
@@ -99,7 +126,7 @@ class Controller(object):
             self.view.error(e)
 
     def import_excluded(self):
-        if self.current_stage == 0 or self.busy:
+        if self.thread["main"].is_alive() or self.current_stage == 0:
             return
         filename = self.view.open_file()
         if filename is None:
@@ -112,7 +139,7 @@ class Controller(object):
             self.view.error(e)
 
     def import_object(self):
-        if self.busy:
+        if self.thread["main"].is_alive():
             return
         filename = self.view.open_file()
         if filename is None:
@@ -126,7 +153,7 @@ class Controller(object):
         self.draw_fig()
 
     def edit_settings(self):
-        if self.current_stage == 0 or self.busy:
+        if self.thread["main"].is_alive() or self.current_stage == 0:
             return
         settings = self.data.get_settings()
         self.view.open_settings_window(settings)
@@ -158,12 +185,8 @@ class Controller(object):
         if file is None:
             return
         fig, ax = plt.subplots()
-        checkpoint = 0.05
-        for i in self.data.plot_events(ax):
-            self.view.update_progressbar(i*100)
-            if i > checkpoint:
-                checkpoint += 0.05
-                self.view.update()
+        for _ in self.data.plot_events(ax):
+            pass
         fig.savefig(file)
 
     def save_excluded(self):
@@ -177,8 +200,7 @@ class Controller(object):
         np.savetxt(filename, self.data.get_good_cells(), fmt="%i")
 
     def save_object(self):
-        # if not self.data.is_analyzed() or self.busy:
-        if self.busy:
+        if self.thread["main"].is_alive():
             return
         filename = self.view.save_as(".pkl", (("Pickle files", "*.pkl"),))
         if filename is None:
@@ -189,7 +211,7 @@ class Controller(object):
 # --------------------------- Button click methods -------------------------- #
 
     def filter_click(self):
-        if self.current_stage == 0 or self.busy:
+        if self.thread["main"].is_alive() or self.current_stage == 0:
             return
         if self.data.get_filtered_fast() is not False:
             self.current_stage = "filtered"
@@ -206,7 +228,7 @@ class Controller(object):
             self.view.error(e)
 
     def distributions_click(self):
-        if self.current_stage == 0 or self.busy:
+        if self.thread["main"].is_alive() or self.current_stage == 0:
             return
         elif self.data.get_distributions() is not False:
             self.current_stage = "distributions"
@@ -223,7 +245,7 @@ class Controller(object):
             self.view.error(e)
 
     def binarize_click(self):
-        if self.current_stage == 0 or self.busy:
+        if self.thread["main"].is_alive() or self.current_stage == 0:
             return
         if self.data.get_binarized_fast() is not False:
             self.current_stage = "binarized"
@@ -274,19 +296,19 @@ class Controller(object):
             self.view.error(e)
 
     def autoexclude_click(self):
-        if self.current_stage == 0 or self.busy:
+        if self.thread["main"].is_alive() or self.current_stage == 0:
             return
-        self.busy = True
+        self.__start_thread(target=self.autoexclude_click_thread)
+
+    def autoexclude_click_thread(self):
         try:
-            for _ in self.data.autoexclude():
-                pass
-            self.draw_fig()
+            for i in self.data.autoexclude():
+                self.progress = i
         except ValueError as e:
             self.view.error(e)
-        self.busy = False
 
     def crop_click(self):
-        if self.current_stage == 0 or self.busy:
+        if self.thread["main"].is_alive() or self.current_stage == 0:
             return
         self.view.open_crop_window()
         self.current_stage = "binarized"
@@ -307,13 +329,14 @@ class Controller(object):
         try:
             for i in self.data.autolimit():
                 self.progress = i
-                print(i)
+                if self.thread["main"].stopped():
+                    return
         except ValueError as e:
             self.view.error(e)
         self.current_stage = "binarized"
 
     def analysis_click(self):
-        if self.busy:
+        if self.thread["main"].is_alive():
             self.view.error("Thread busy.")
             return
         if not self.data.is_analyzed():
@@ -327,13 +350,17 @@ class Controller(object):
                 return
         self.view.open_analysis_window()
         self.__start_thread(target=self.analysis_click_thread,
-                            next_func=self.analysis_click_after
+                            next_func=self.analysis_click_after,
+                            window="analysis"
                             )
 
     def analysis_click_thread(self):
         try:
+            self.progress = 0
             threshold = self.data.get_settings()["Network threshold"]
+            self.progress = 0.25
             self.analysis.import_data(self.data, threshold)
+            self.progress = 0.5
             self.analysis.to_pandas()
         except ValueError as e:
             self.view.error(e)
@@ -348,7 +375,7 @@ class Controller(object):
                            )
 
     def waves_click(self):
-        if self.busy:
+        if self.thread["main"].is_alive():
             self.view.error("Thread busy.")
             return
         if not self.data.is_analyzed():
@@ -372,6 +399,8 @@ class Controller(object):
         try:
             for i in self.waves.detect_waves():
                 self.progress = i
+                if self.thread["waves"].stopped():
+                    return
         except ValueError as e:
             self.view.error(e)
 
@@ -389,6 +418,8 @@ class Controller(object):
         try:
             for i in self.waves.characterize_waves():
                 self.progress = i
+                if self.thread["waves"].stopped():
+                    return
         except ValueError as e:
             self.view.error(e)
 
