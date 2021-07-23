@@ -130,13 +130,13 @@ class View(tk.Tk):
         alim_button.pack(side=tk.LEFT)
 
         waves_button = tk.Button(
-            topframe, highlightbackground=BG, text="Waves",
+            topframe, highlightbackground=BG, text="Wave Analysis",
             command=self.controller.waves_click
         )
         waves_button.pack(side=tk.RIGHT)
 
         analysis_button = tk.Button(
-            topframe, highlightbackground=BG, text="Analysis",
+            topframe, highlightbackground=BG, text="Parameter Analysis",
             command=self.controller.analysis_click
             )
         analysis_button.pack(side=tk.RIGHT, padx=(50, 0))
@@ -217,6 +217,14 @@ class View(tk.Tk):
 
         self.minsize(width=WIDTH, height=HEIGHT)
 
+        ttk.Style().configure("TNotebook", background="black")
+        ttk.Style().map("TNotebook.Tab", background=[("selected", "black")],
+                        foreground=[("selected", "black")]
+                        )
+        ttk.Style().configure("TNotebook.Tab", background="black",
+                              foreground="black"
+                              )
+
     def open_file(self):
         filename = filedialog.askopenfilename(
             title="Select file",
@@ -240,13 +248,13 @@ class View(tk.Tk):
             return None
         return directory
 
-    def save_as(self, extension):
-        filename = filedialog.asksaveasfile(
-            mode='w', defaultextension=extension
+    def save_as(self, default, extensions):
+        filename = filedialog.asksaveasfilename(
+            defaultextension=default, filetypes=extensions
             )
-        if filename is None:
+        if filename == '':
             return None
-        return filename.name
+        return filename
 
     def refresh_canvas(self, fig):
         if type(self.canvas) == tk.Canvas:
@@ -355,29 +363,39 @@ class View(tk.Tk):
         analysis_window.title("Parameter analysis")
         analysis_window.minsize(width=WIDTH, height=HEIGHT)
 
-        # # Status
-        # status_frame = tk.LabelFrame(analysis_window, text="Tools & Status",
-        #                              background=BG, foreground=TEXT
-        #                              )
-        # status_frame.pack(expand=1, fill="both", side=tk.LEFT)
+        # Status
+        status_frame = tk.LabelFrame(analysis_window, text="Tools & Status",
+                                     background=BG, foreground=TEXT
+                                     )
+        status_frame.pack(expand=1, fill="both", side=tk.LEFT)
+
+        status = "Number of all cells: {}\n\
+                  Number of good cells: {}\n\
+                  Positions set: {}".format(
+            self.controller.data.get_cells(),
+            self.controller.data.get_good_cells().sum(),
+            "False" if self.controller.analysis.get_positions() is False
+            else "True"
+        )
+        info = tk.Label(status_frame, bg=BG, fg=WHITE, text=status)
+        info.pack()
+
+        export_dataframe_button = tk.Button(
+            status_frame, text="Export Data", highlightbackground=BG,
+            command=self.controller.export_dataframe_click
+            )
+        export_dataframe_button.pack()
 
         # Notebook
         notebook_frame = tk.LabelFrame(analysis_window, text="Plots")
         notebook_frame.pack(expand=1, fill="both", side=tk.LEFT)
         nb = ttk.Notebook(notebook_frame)
-        dynamic_par_tab = ttk.Frame(nb)
-        network_par_tab = ttk.Frame(nb)
+        self.dynamic_par_tab = ttk.Frame(nb)
+        self.network_par_tab = ttk.Frame(nb)
 
-        nb.add(dynamic_par_tab, text='Dynamic Analysis')
-        nb.add(network_par_tab, text='Network Plot')
+        nb.add(self.dynamic_par_tab, text='Dynamic Parameters')
+        nb.add(self.network_par_tab, text='Network Parameters')
         nb.pack(expand=1, fill="both")
-
-        self.draw_fig(self.controller.dynamic_parameters_fig(),
-                      dynamic_par_tab
-                      )
-        self.draw_fig(self.controller.network_parameters_fig(),
-                      network_par_tab
-                      )
 
     def open_waves_window(self):
         # Open window

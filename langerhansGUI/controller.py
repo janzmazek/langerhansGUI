@@ -3,6 +3,7 @@ import yaml
 import pickle
 import matplotlib.pyplot as plt
 import seaborn as sns
+import os
 
 
 class Controller(object):
@@ -105,7 +106,7 @@ class Controller(object):
     def save_settings(self):
         if self.data.get_settings() is False:
             return
-        filename = self.view.save_as("yaml")
+        filename = self.view.save_as(".yaml", (("YAML files", "*.yaml"),))
         if filename is None:
             return
         with open(filename, "w") as outfile:
@@ -116,7 +117,7 @@ class Controller(object):
     def save_image(self):
         if self.current_stage == 0:
             return
-        file = self.view.save_as("pdf")
+        file = self.view.save_as(".pdf", (("PDF", "*.pdf"),))
         if file is None:
             return
         self.__get_fig()
@@ -125,7 +126,7 @@ class Controller(object):
     def save_eventplot(self):
         if not self.data.is_analyzed():
             return
-        file = self.view.save_as("pdf")
+        file = self.view.save_as(".pdf", (("PDF", "*.pdf"),))
         if file is None:
             return
         fig, ax = plt.subplots()
@@ -143,7 +144,7 @@ class Controller(object):
             return
         if self.data.get_good_cells() is False:
             return
-        filename = self.view.save_as("dat")
+        filename = self.view.save_as(".dat", (("RAW text files", "*.dat"),))
         if filename is None:
             return
         np.savetxt(filename, self.data.get_good_cells(), fmt="%i")
@@ -152,7 +153,7 @@ class Controller(object):
         # if not self.data.is_analyzed() or self.busy:
         if self.busy:
             return
-        filename = self.view.save_as("pkl")
+        filename = self.view.save_as(".pkl", (("Pickle files", "*.pkl"),))
         if filename is None:
             return
         with open(filename, "wb") as output:
@@ -288,14 +289,21 @@ class Controller(object):
                 )
             if not proceed:
                 return
+        self.view.open_analysis_window()
+        self.view.update()
         try:
             threshold = self.data.get_settings()["Network threshold"]
             self.analysis.import_data(self.data, threshold)
             self.analysis.to_pandas()
+            self.view.draw_fig(self.dynamic_parameters_fig(),
+                               self.view.dynamic_par_tab
+                               )
+            self.view.draw_fig(self.network_parameters_fig(),
+                               self.view.network_par_tab
+                               )
         except ValueError as e:
             self.view.error(e)
             return
-        self.view.open_analysis_window()
 
     def waves_click(self):
         if not self.data.is_analyzed() or self.busy:
@@ -351,6 +359,23 @@ class Controller(object):
         except ValueError as e:
             self.view.error(e)
         self.busy = False
+
+    def export_dataframe_click(self):
+        try:
+            dataframe = self.analysis.get_dataframe()
+            extensions = (("Excel files", "*.xlsx"), ("CSV files", "*.csv"))
+            filename = self.view.save_as(".xlsx", extensions)
+            if filename is None:
+                return
+            _, file_extension = os.path.splitext(filename)
+            print(filename, file_extension)
+            if file_extension == ".csv":
+                dataframe.to_csv(filename)
+            elif file_extension == ".xlsx":
+                dataframe.to_excel(filename)
+
+        except ValueError as e:
+            self.view.error(e)
 
     def __get_fig(self):
         if self.current_stage == "imported":
@@ -425,6 +450,7 @@ class Controller(object):
                 data = df.loc[df["Par ID"] == p]
                 sns.boxplot(ax=ax[i, j], x="Parameter", y="Value", data=data)
                 ax[i, j].set_ylabel('')
+                ax[i, j].set_xlabel('')
         return fig
 
     def glob_network_parameters_fig(self):
