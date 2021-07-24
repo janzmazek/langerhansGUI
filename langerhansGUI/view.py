@@ -1,10 +1,12 @@
 import tkinter as tk
-from tkinter import messagebox
+from tkinter import StringVar, messagebox
 from tkinter import filedialog
 from tkinter import ttk
 from langerhans import analysis
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import webbrowser
+
+from numpy import pad
 
 
 # Window parameters
@@ -361,7 +363,7 @@ class View(tk.Tk):
         canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
 
     def open_analysis_window(self):
-        # Open window
+        # --------------------------- Open window --------------------------- #
         self.window["analysis"] = tk.Toplevel()
         self.window["analysis"].title("Parameter analysis")
         self.window["analysis"].minsize(width=WIDTH, height=HEIGHT)
@@ -369,30 +371,74 @@ class View(tk.Tk):
         upper_frame = tk.Frame(self.window["analysis"])
         upper_frame.pack(expand=1, fill="both", side=tk.TOP)
 
-        # Status
+        # ------------------------------ Status ----------------------------- #
         status_frame = tk.LabelFrame(upper_frame, text="Tools & Status",
                                      background=BG, foreground=TEXT
                                      )
         status_frame.pack(expand=1, fill="both", side=tk.LEFT)
 
-        status = "Number of all cells: {}\n\
-                  Number of good cells: {}\n\
-                  Positions set: {}".format(
+        # ---------- Progress status frame ---------- #
+        progress_frame = tk.Frame(status_frame, background=BG,
+                                  padx=20, pady=20)
+        progress_frame.pack()
+
+        label = tk.Label(progress_frame, text="Status of Calculations",
+                         background=BG, foreground=TEXT, font=(None, 20))
+        label.pack()
+
+        # Status of analysis
+        self.analysis_labels = {}
+
+        frame = tk.Frame(progress_frame, background=BG)
+        frame.pack(side=tk.TOP)
+
+        label = tk.Label(frame, text='Status of Analysis:',
+                         background=BG, foreground=TEXT)
+        label.pack(side=tk.LEFT)
+
+        analysis_status = tk.StringVar(value="WAITING...")
+        self.analysis_labels["status"] = analysis_status
+        t = tk.Label(frame, textvariable=analysis_status,
+                     background=BG, foreground=TEXT, font=(None, 15))
+        t.pack(side=tk.LEFT)
+
+        # ---------- Info frame ---------- #
+        info_frame = tk.Frame(status_frame, background=BG,
+                              padx=20, pady=20)
+        info_frame.pack()
+
+        label = tk.Label(info_frame, text="Additional INFO",
+                         background=BG, foreground=TEXT, font=(None, 20))
+        label.pack()
+
+        info = "Number of all cells: {}\n\
+                Number of good cells: {}\n\
+                Positions set: {}".format(
             self.controller.data.get_cells(),
             self.controller.data.get_good_cells().sum(),
             "False" if self.controller.data.get_positions() is False
             else "True"
         )
-        info = tk.Label(status_frame, bg=BG, fg=WHITE, text=status)
+        info = tk.Label(info_frame, bg=BG, fg=WHITE, text=info,
+                        justify=tk.LEFT)
         info.pack()
 
+        # ---------- Export frame ---------- #
+        export_frame = tk.Frame(status_frame, background=BG,
+                                padx=20, pady=20)
+        export_frame.pack()
+
+        label = tk.Label(export_frame, text="Export Options",
+                         background=BG, foreground=TEXT, font=(None, 20))
+        label.pack()
+
         export_dataframe_button = tk.Button(
-            status_frame, text="Export Data", highlightbackground=BG,
+            export_frame, text="Export Data", highlightbackground=BG,
             command=self.controller.export_dataframe_click
             )
-        export_dataframe_button.pack()
+        export_dataframe_button.pack(side=tk.LEFT)
 
-        # Notebook
+        # ----------------------------- Notebook ---------------------------- #
         notebook_frame = tk.LabelFrame(upper_frame, text="Plots")
         notebook_frame.pack(expand=1, fill="both", side=tk.LEFT)
         nb = ttk.Notebook(notebook_frame)
@@ -416,7 +462,7 @@ class View(tk.Tk):
             )
 
     def open_waves_window(self):
-        # Open window
+        # --------------------------- Open window --------------------------- #
         self.window["waves"] = tk.Toplevel()
         self.window["waves"].title("Wave analysis")
         self.window["waves"].minsize(width=WIDTH, height=HEIGHT)
@@ -424,13 +470,76 @@ class View(tk.Tk):
         upper_frame = tk.Frame(self.window["waves"])
         upper_frame.pack(expand=1, fill="both", side=tk.TOP)
 
-        # Status
+        # ------------------------------ Status ----------------------------- #
         status_frame = tk.LabelFrame(upper_frame, text="Tools & Status",
                                      background=BG, foreground=TEXT
                                      )
         status_frame.pack(expand=1, fill="both", side=tk.LEFT)
 
-        # Notebook
+        # ---------- Progress status frame ---------- #
+        progress_frame = tk.Frame(status_frame, background=BG,
+                                  padx=20, pady=20)
+        progress_frame.pack()
+
+        label = tk.Label(progress_frame, text="Status of Calculations",
+                         background=BG, foreground=TEXT, font=(None, 20))
+        label.pack()
+
+        # Status of wave detection
+        self.wave_labels = {}
+
+        frame = tk.Frame(progress_frame, background=BG)
+        frame.pack(side=tk.TOP)
+
+        label = tk.Label(frame, text='Status of Wave Detection:',
+                         background=BG, foreground=TEXT)
+        label.pack(side=tk.LEFT)
+
+        detection_status = tk.StringVar(value="WAITING...")
+        self.wave_labels["detection"] = detection_status
+        t = tk.Label(frame, textvariable=detection_status,
+                     background=BG, foreground=TEXT, font=(None, 15))
+        t.pack(side=tk.LEFT)
+
+        # Status of wave characterization
+        frame = tk.Frame(progress_frame, background=BG)
+        frame.pack(side=tk.TOP)
+
+        label = tk.Label(frame, text='Status of Wave Characterization:',
+                         background=BG, foreground=TEXT)
+        label.pack(side=tk.LEFT)
+
+        characterization_status = tk.StringVar(value="WAITING...")
+        self.wave_labels["characterization"] = characterization_status
+        t = tk.Label(frame, textvariable=characterization_status,
+                     background=BG, foreground=TEXT, font=(None, 15))
+        t.pack(side=tk.LEFT)
+
+        # Cancellation buttons
+        button = tk.Button(status_frame, text="Cancel processes",
+                           highlightbackground=BG,
+                           command=self.controller.cancel_wave_click
+                           )
+        button.pack()
+
+        # ---------- Export frame ---------- #
+        export_frame = tk.Frame(status_frame, background=BG,
+                                padx=20, pady=20)
+        export_frame.pack()
+
+        label = tk.Label(export_frame, text="Export Options",
+                         background=BG, foreground=TEXT, font=(None, 20))
+        label.pack()
+
+        buttons = tk.Frame(export_frame, background=BG)
+        buttons.pack()
+
+        self.export_act_sig = tk.Button(
+            buttons, text="Export act_sig", highlightbackground=BG,
+            command=self.controller.export_act_sig_click, state="disabled")
+        self.export_act_sig.pack(side=tk.LEFT)
+
+        # ----------------------------- Notebook ---------------------------- #
         notebook_frame = tk.LabelFrame(upper_frame, text="Plots")
         notebook_frame.pack(expand=1, fill="both", side=tk.LEFT)
         nb = ttk.Notebook(notebook_frame)
@@ -468,6 +577,8 @@ class View(tk.Tk):
     def close_main_window(self):
         if messagebox.askokcancel("Quit", "Do you want to quit?"):
             if self.controller.thread["main"].is_alive():
+                self.controller.thread["analysis"].stop()
+                self.controller.thread["waves"].stop()
                 self.controller.thread["main"].stop()
                 self.controller.thread["main"].join()
             self.destroy()
@@ -476,9 +587,6 @@ class View(tk.Tk):
         if messagebox.askokcancel("Quit", "Do you want to quit?"):
             if self.controller.thread["analysis"].is_alive():
                 self.controller.thread["analysis"].stop()
-                self.controller.thread["waves"].stop()
-                self.controller.thread["analysis"].stop()
-                self.controller.thread["analysis"].join()
             self.window["analysis"].destroy()
             self.window["analysis"] = False
 
@@ -486,6 +594,6 @@ class View(tk.Tk):
         if messagebox.askokcancel("Quit", "Do you want to quit?"):
             if self.controller.thread["waves"].is_alive():
                 self.controller.thread["waves"].stop()
-                self.controller.thread["waves"].join()
+                print("Stopped thread")
             self.window["waves"].destroy()
             self.window["waves"] = False

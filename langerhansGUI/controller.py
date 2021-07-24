@@ -355,6 +355,7 @@ class Controller(object):
                             )
 
     def analysis_click_thread(self):
+        self.view.analysis_labels["status"].set("IN PROGRESS...")
         try:
             self.progress = 0
             threshold = self.data.get_settings()["Network threshold"]
@@ -367,6 +368,7 @@ class Controller(object):
             return
 
     def analysis_click_after(self):
+        self.view.analysis_labels["status"].set("COMPLETED")
         self.view.draw_fig(self.dynamic_parameters_fig(),
                            self.view.dynamic_par_tab
                            )
@@ -397,17 +399,23 @@ class Controller(object):
 
     def wave_detection(self):
         try:
+            self.view.wave_labels["detection"].set("IN PROGRESS...")
             for i in self.waves.detect_waves():
                 self.progress = i
                 if self.thread["waves"].stopped():
+                    self.view.wave_labels["detection"].set("STOPPED")
                     return
+            self.view.wave_labels["detection"].set("COMPLETED")
+            self.view.export_act_sig["state"] = "normal"
         except ValueError as e:
             self.view.error(e)
 
     def after_wave_detection(self):
+        if self.thread["waves"].stopped():
+            return
         fig, ax = plt.subplots(figsize=(16, 9))
         self.waves.plot_act_sig(ax)
-        self.view.draw_fig(fig, self.view.detection_frame)
+        self.view.draw_fig(fig, self.view.detection_tab)
 
         self.__start_thread(target=self.wave_characterization,
                             next_func=self.after_wave_characterization,
@@ -416,17 +424,22 @@ class Controller(object):
 
     def wave_characterization(self):
         try:
+            self.view.wave_labels["characterization"].set("IN PROGRESS...")
             for i in self.waves.characterize_waves():
                 self.progress = i
                 if self.thread["waves"].stopped():
+                    self.view.wave_labels["characterization"].set("STOPPED")
                     return
+            self.view.wave_labels["characterization"].set("COMPLETED")
         except ValueError as e:
             self.view.error(e)
 
     def after_wave_characterization(self):
+        if self.thread["waves"].stopped():
+            return
         fig, ax = plt.subplots(figsize=(16, 9))
         ax.plot(np.linspace(0, 10, 100), np.sin(np.linspace(0, 10, 100)))
-        self.view.draw_fig(fig, self.view.characterization_frame)
+        self.view.draw_fig(fig, self.view.characterization_tab)
 
     def export_dataframe_click(self):
         try:
@@ -442,6 +455,20 @@ class Controller(object):
             elif file_extension == ".xlsx":
                 dataframe.to_excel(filename)
 
+        except ValueError as e:
+            self.view.error(e)
+
+    def cancel_wave_click(self):
+        self.thread["waves"].stop()
+
+    def export_act_sig_click(self):
+        try:
+            act_sig = self.waves.get_act_sig()
+            extensions = (("Raw files", "*txt"),)
+            filename = self.view.save_as(".txt", extensions)
+            if filename is None:
+                return
+            np.savetxt(filename, act_sig)
         except ValueError as e:
             self.view.error(e)
 
