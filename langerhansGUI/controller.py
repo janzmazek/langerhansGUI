@@ -6,6 +6,8 @@ import seaborn as sns
 import os
 import threading
 
+from langerhans import Analysis, Waves
+
 
 class StoppableThread(threading.Thread):
     """Thread class with a stop() method. The thread itself has to check
@@ -26,10 +28,10 @@ class StoppableThread(threading.Thread):
 class Controller(object):
     """docstring for Controller."""
 
-    def __init__(self, data, analysis, waves, view):
+    def __init__(self, data, view):
         self.data = data
-        self.analysis = analysis
-        self.waves = waves
+        self.analysis = False
+        self.waves = False
         self.view = view
 
         self.view.register(self)
@@ -349,10 +351,14 @@ class Controller(object):
             if not proceed:
                 return
         self.view.open_analysis_window()
-        self.__start_thread(target=self.analysis_click_thread,
-                            next_func=self.analysis_click_after,
-                            window="analysis"
-                            )
+        self.analysis = Analysis()
+        try:
+            self.__start_thread(target=self.analysis_click_thread,
+                                next_func=self.analysis_click_after,
+                                window="analysis"
+                                )
+        except ValueError as e:
+            self.view.error(e)
 
     def analysis_click_thread(self):
         self.view.analysis_labels["status"].set("IN PROGRESS...")
@@ -386,16 +392,19 @@ class Controller(object):
         if self.data.get_positions() is False:
             self.view.error("Positions not set.")
             return
+        if self.waves is not False:
+            return
+        self.view.open_waves_window()
+        self.waves = Waves()
         try:
             self.waves.import_data(self.data)
+            self.__start_thread(target=self.wave_detection,
+                                next_func=self.after_wave_detection,
+                                window="waves"
+                                )
         except ValueError as e:
             self.view.error(e)
             return
-        self.view.open_waves_window()
-        self.__start_thread(target=self.wave_detection,
-                            next_func=self.after_wave_detection,
-                            window="waves"
-                            )
 
     def wave_detection(self):
         try:
@@ -438,7 +447,7 @@ class Controller(object):
         if self.thread["waves"].stopped():
             return
         fig, ax = plt.subplots(figsize=(16, 9))
-        ax.plot(np.linspace(0, 10, 100), np.sin(np.linspace(0, 10, 100)))
+        self.waves.plot_events(ax)
         self.view.draw_fig(fig, self.view.characterization_tab)
 
     def export_dataframe_click(self):
@@ -458,8 +467,13 @@ class Controller(object):
         except ValueError as e:
             self.view.error(e)
 
-    def cancel_wave_click(self):
+    def cancel_analysis_click(self):
+        self.thread["analysis"].stop()
+        self.analysis = False
+
+    def cancel_waves_click(self):
         self.thread["waves"].stop()
+        self.waves = False
 
     def export_act_sig_click(self):
         try:

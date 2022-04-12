@@ -411,16 +411,15 @@ class View(tk.Tk):
                          background=BG, foreground=TEXT, font=(None, 20))
         label.pack()
 
-        info = "Number of all cells: {}\n\
-                Number of good cells: {}\n\
-                Positions set: {}".format(
+        info = "Number of all cells: {}\nNumber of good cells: {}\n\
+Positions set: {}".format(
             self.controller.data.get_cells(),
             self.controller.data.get_good_cells().sum(),
             "False" if self.controller.data.get_positions() is False
             else "True"
         )
         info = tk.Label(info_frame, bg=BG, fg=WHITE, text=info,
-                        justify=tk.LEFT)
+                        justify=tk.CENTER)
         info.pack()
 
         # ---------- Export frame ---------- #
@@ -436,7 +435,7 @@ class View(tk.Tk):
             export_frame, text="Export Data", highlightbackground=BG,
             command=self.controller.export_dataframe_click
             )
-        export_dataframe_button.pack(side=tk.LEFT)
+        export_dataframe_button.pack()
 
         # ----------------------------- Notebook ---------------------------- #
         notebook_frame = tk.LabelFrame(upper_frame, text="Plots")
@@ -518,7 +517,7 @@ class View(tk.Tk):
         # Cancellation buttons
         button = tk.Button(status_frame, text="Cancel processes",
                            highlightbackground=BG,
-                           command=self.controller.cancel_wave_click
+                           command=self.controller.cancel_waves_click
                            )
         button.pack()
 
@@ -586,14 +585,13 @@ class View(tk.Tk):
     def close_analysis_window(self):
         if messagebox.askokcancel("Quit", "Do you want to quit?"):
             if self.controller.thread["analysis"].is_alive():
-                self.controller.thread["analysis"].stop()
+                self.controller.cancel_analysis_click()
             self.window["analysis"].destroy()
             self.window["analysis"] = False
 
     def close_waves_window(self):
         if messagebox.askokcancel("Quit", "Do you want to quit?"):
             if self.controller.thread["waves"].is_alive():
-                self.controller.thread["waves"].stop()
-                print("Stopped thread")
+                self.controller.cancel_waves_click()
             self.window["waves"].destroy()
             self.window["waves"] = False

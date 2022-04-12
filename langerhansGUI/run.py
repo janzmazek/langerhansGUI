@@ -1,4 +1,4 @@
-from langerhans import Data, Analysis, Waves
+from langerhans import Data
 
 from langerhansGUI.view import View
 from langerhansGUI.controller import Controller
@@ -6,10 +6,8 @@ from langerhansGUI.controller import Controller
 
 def run():
     data = Data()
-    analysis = Analysis()
-    waves = Waves()
     view = View()
-    Controller(data, analysis, waves, view)
+    Controller(data, view)
     view.configure()
 
     view.mainloop()
