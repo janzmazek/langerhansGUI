@@ -223,7 +223,7 @@ class Controller(object):
 
     def filter_click_thread(self):
         try:
-            for i in self.data.filter_fast():
+            for i in self.data.filter_fast_progress():
                 self.progress = i
             self.current_stage = "filtered"
         except ValueError as e:
@@ -240,7 +240,7 @@ class Controller(object):
 
     def distributions_click_thread(self):
         try:
-            for i in self.data.compute_distributions():
+            for i in self.data.compute_distributions_progress():
                 self.progress = i
             self.current_stage = "distributions"
         except ValueError as e:
@@ -257,7 +257,7 @@ class Controller(object):
 
     def binarize_click_thread(self):
         try:
-            for i in self.data.binarize_fast():
+            for i in self.data.binarize_fast_progress():
                 self.progress = i
             self.current_stage = "binarized"
         except ValueError as e:
@@ -304,7 +304,7 @@ class Controller(object):
 
     def autoexclude_click_thread(self):
         try:
-            for i in self.data.autoexclude():
+            for i in self.data.autoexclude_progress():
                 self.progress = i
         except ValueError as e:
             self.view.error(e)
@@ -329,7 +329,7 @@ class Controller(object):
 
     def autolimit_thread(self):
         try:
-            for i in self.data.autolimit():
+            for i in self.data.autolimit_progress():
                 self.progress = i
                 if self.thread["main"].stopped():
                     return
