@@ -1,10 +1,13 @@
+from attr import Attribute
 import numpy as np
 import yaml
 import pickle
 import matplotlib.pyplot as plt
 import seaborn as sns
 import os
+import queue
 import threading
+import multiprocessing as mp
 
 from langerhans import Analysis, Waves
 
@@ -398,7 +401,14 @@ class Controller(object):
         self.waves = Waves()
         try:
             self.waves.import_data(self.data)
+            self.view.wave_labels["detection"].set("IN PROGRESS...")
+            fig, ax = plt.subplots(figsize=(8, 4.5))
+            self.view.draw_waves(fig)
+            q = queue.Queue()
+            end_of_queue = object()
+            self.manage_queue(q, end_of_queue, fig, ax)
             self.__start_thread(target=self.wave_detection,
+                                args=(q, end_of_queue),
                                 next_func=self.after_wave_detection,
                                 window="waves"
                                 )
@@ -406,14 +416,36 @@ class Controller(object):
             self.view.error(e)
             return
 
-    def wave_detection(self):
+    def manage_queue(self, q, end_of_queue, fig, ax):
+        '''pull an item off the queue and act on it'''
+        result_list = []
+        while not q.empty():
+            result_list.append(q.get())
+        for e in result_list:
+            print(e)
+            if e is end_of_queue:
+                q.task_done()
+                return
+            try:
+                self.waves.plot_events_real_time(ax, e)
+            except AttributeError() as e:
+                print(e)
+                return
+            self.view.refresh_waves()
+
+        # repeat again in 1 second
+        self.view.after(10000, self.manage_queue, q, end_of_queue, fig, ax)
+
+    def wave_detection(self, q, end_of_queue):
         try:
-            self.view.wave_labels["detection"].set("IN PROGRESS...")
-            for i in self.waves.detect_waves():
-                self.progress = i
+            for i in self.waves.detect_waves_progress(real_time=True):
+                print(i)
+                q.put(i)
                 if self.thread["waves"].stopped():
                     self.view.wave_labels["detection"].set("STOPPED")
+                    q.put(end_of_queue)
                     return
+            q.put(end_of_queue)
             self.view.wave_labels["detection"].set("COMPLETED")
             self.view.export_act_sig["state"] = "normal"
         except ValueError as e:
@@ -422,14 +454,11 @@ class Controller(object):
     def after_wave_detection(self):
         if self.thread["waves"].stopped():
             return
-        fig, ax = plt.subplots(figsize=(16, 9))
-        self.waves.plot_act_sig(ax)
-        self.view.draw_fig(fig, self.view.detection_tab)
 
-        self.__start_thread(target=self.wave_characterization,
-                            next_func=self.after_wave_characterization,
-                            window="waves"
-                            )
+        # self.__start_thread(target=self.wave_characterization,
+        #                     next_func=self.after_wave_characterization,
+        #                     window="waves"
+        #                     )
 
     def wave_characterization(self):
         try:

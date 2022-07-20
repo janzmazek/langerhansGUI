@@ -362,6 +362,14 @@ class View(tk.Tk):
         canvas.draw()
         canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
 
+    def draw_waves(self, fig):
+        self.waves_canvas = FigureCanvasTkAgg(fig, master=self.detection_tab)
+        self.waves_canvas.draw()
+        self.waves_canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
+
+    def refresh_waves(self):
+        self.waves_canvas.draw_idle()
+
     def open_analysis_window(self):
         # --------------------------- Open window --------------------------- #
         self.window["analysis"] = tk.Toplevel()
@@ -501,18 +509,18 @@ Positions set: {}".format(
         t.pack(side=tk.LEFT)
 
         # Status of wave characterization
-        frame = tk.Frame(progress_frame, background=BG)
-        frame.pack(side=tk.TOP)
+        # frame = tk.Frame(progress_frame, background=BG)
+        # frame.pack(side=tk.TOP)
 
-        label = tk.Label(frame, text='Status of Wave Characterization:',
-                         background=BG, foreground=TEXT)
-        label.pack(side=tk.LEFT)
+        # label = tk.Label(frame, text='Status of Wave Characterization:',
+        #                  background=BG, foreground=TEXT)
+        # label.pack(side=tk.LEFT)
 
-        characterization_status = tk.StringVar(value="WAITING...")
-        self.wave_labels["characterization"] = characterization_status
-        t = tk.Label(frame, textvariable=characterization_status,
-                     background=BG, foreground=TEXT, font=(None, 15))
-        t.pack(side=tk.LEFT)
+        # characterization_status = tk.StringVar(value="WAITING...")
+        # self.wave_labels["characterization"] = characterization_status
+        # t = tk.Label(frame, textvariable=characterization_status,
+        #              background=BG, foreground=TEXT, font=(None, 15))
+        # t.pack(side=tk.LEFT)
 
         # Cancellation buttons
         button = tk.Button(status_frame, text="Cancel processes",
@@ -543,10 +551,10 @@ Positions set: {}".format(
         notebook_frame.pack(expand=1, fill="both", side=tk.LEFT)
         nb = ttk.Notebook(notebook_frame)
         self.detection_tab = ttk.Frame(nb)
-        self.characterization_tab = ttk.Frame(nb)
+        # self.characterization_tab = ttk.Frame(nb)
 
         nb.add(self.detection_tab, text="Active Signal")
-        nb.add(self.characterization_tab, text="Wave characterization")
+        # nb.add(self.characterization_tab, text="Wave characterization")
         nb.pack(expand=1, fill="both")
 
         self.waves_progressbar = ttk.Progressbar(self.window["waves"],
@@ -595,3 +603,4 @@ Positions set: {}".format(
                 self.controller.cancel_waves_click()
             self.window["waves"].destroy()
             self.window["waves"] = False
+            self.controller.waves = False
